@@ -78,6 +78,7 @@ interface Props {
   discountedSubtotal: number;
   isIntraState: boolean;
   isExport: boolean;
+  isIndianSeller?: boolean;
   totalCGST: number;
   totalSGST: number;
   totalIGST: number;
@@ -95,23 +96,24 @@ interface Props {
   onNotesChange: (notes: string) => void;
   onTermsChange: (terms: string) => void;
   onPaymentMethodChange: (method: PaymentMethod | '') => void;
+  errors?: Set<string>;
 }
 
 export default function InvoiceTotals({
   subtotal, discountType, discountValue, discountAmount, discountedSubtotal,
-  isIntraState, isExport, totalCGST, totalSGST, totalIGST,
+  isIntraState, isExport, isIndianSeller = true, totalCGST, totalSGST, totalIGST,
   additionalChargesTotal, roundOff, grandTotal,
   notes, termsAndConditions, paymentMethod, currencySymbol, currencyCode,
   onDiscountTypeChange, onDiscountValueChange,
   onRoundOffChange, onNotesChange, onTermsChange, onPaymentMethodChange,
+  errors,
 }: Props) {
+  const hasErr = (key: string) => !!errors?.has(key);
   // Session-only custom payment methods (cleared on reload — no localStorage)
   const [customMethods, setCustomMethods] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
   const [draftMethod, setDraftMethod] = useState('');
   const addInputRef = useRef<HTMLInputElement>(null);
-
-  const isPresetMethod = (v: string) => (PAYMENT_METHOD_OPTIONS as readonly string[]).includes(v);
 
   const commitNewMethod = () => {
     const titled = toTitleCase(draftMethod);
@@ -210,7 +212,7 @@ export default function InvoiceTotals({
             )}
           </div>
 
-          {isExport && (
+          {isExport && isIndianSeller && (
             <div className="mb-3 p-2 rounded-lg bg-emerald-50 border border-emerald-100 text-xs text-emerald-700 font-medium">
               GST Exempt · Zero Rated Supply
             </div>
@@ -266,30 +268,30 @@ export default function InvoiceTotals({
               </div>
             )}
 
-            {/* GST split — CGST + SGST for intra-state, IGST for inter-state, hidden for exports */}
-            {!isExport && (isIntraState ? (
+            {/* Tax section. Indian sellers: CGST+SGST (intra) or IGST (inter). Non-Indian sellers: single Tax Amount row. Always shown — even when zero. */}
+            {!isExport && isIndianSeller && (isIntraState ? (
               <>
-                {totalCGST > 0 && (
-                  <div className="flex justify-between items-center py-2 border-b border-blue-50">
-                    <span className="text-sm text-gray-500 font-medium">CGST</span>
-                    <span className="text-sm font-semibold text-gray-800">{currencySymbol}{totalCGST.toFixed(2)}</span>
-                  </div>
-                )}
-                {totalSGST > 0 && (
-                  <div className="flex justify-between items-center py-2 border-b border-blue-50">
-                    <span className="text-sm text-gray-500 font-medium">SGST</span>
-                    <span className="text-sm font-semibold text-gray-800">{currencySymbol}{totalSGST.toFixed(2)}</span>
-                  </div>
-                )}
+                <div className="flex justify-between items-center py-2 border-b border-blue-50">
+                  <span className="text-sm text-gray-500 font-medium">CGST</span>
+                  <span className="text-sm font-semibold text-gray-800">{currencySymbol}{totalCGST.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-blue-50">
+                  <span className="text-sm text-gray-500 font-medium">SGST</span>
+                  <span className="text-sm font-semibold text-gray-800">{currencySymbol}{totalSGST.toFixed(2)}</span>
+                </div>
               </>
             ) : (
-              totalIGST > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-blue-50">
-                  <span className="text-sm text-gray-500 font-medium">IGST</span>
-                  <span className="text-sm font-semibold text-gray-800">{currencySymbol}{totalIGST.toFixed(2)}</span>
-                </div>
-              )
+              <div className="flex justify-between items-center py-2 border-b border-blue-50">
+                <span className="text-sm text-gray-500 font-medium">IGST</span>
+                <span className="text-sm font-semibold text-gray-800">{currencySymbol}{totalIGST.toFixed(2)}</span>
+              </div>
             ))}
+            {!isExport && !isIndianSeller && (
+              <div className="flex justify-between items-center py-2 border-b border-blue-50">
+                <span className="text-sm text-gray-500 font-medium">Tax Amount</span>
+                <span className="text-sm font-semibold text-gray-800">{currencySymbol}{(totalCGST + totalSGST + totalIGST).toFixed(2)}</span>
+              </div>
+            )}
 
             {/* Additional Charges */}
             {additionalChargesTotal > 0 && (
@@ -367,8 +369,10 @@ export default function InvoiceTotals({
       {/* Payment Method */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 ring-1 ring-slate-100">
         <div className="flex items-center gap-2 mb-4">
-          <div className="w-1 h-5 bg-blue-500 rounded-full" />
-          <h2 className="text-sm font-bold text-blue-700 uppercase tracking-widest">Payment Method</h2>
+          <div className={`w-1 h-5 rounded-full ${hasErr('paymentMethod') ? 'bg-red-500' : 'bg-blue-500'}`} />
+          <h2 className={`text-sm font-bold uppercase tracking-widest ${hasErr('paymentMethod') ? 'text-red-600' : 'text-blue-700'}`}>
+            Payment Method <span className="text-red-500">*</span>
+          </h2>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           {PAYMENT_METHOD_OPTIONS.map((method) => (
@@ -474,8 +478,10 @@ export default function InvoiceTotals({
       {/* Terms & Conditions */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 ring-1 ring-slate-100">
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-1 h-5 bg-blue-500 rounded-full" />
-          <h2 className="text-sm font-bold text-blue-700 uppercase tracking-widest">Terms &amp; Conditions</h2>
+          <div className={`w-1 h-5 rounded-full ${hasErr('termsAndConditions') ? 'bg-red-500' : 'bg-blue-500'}`} />
+          <h2 className={`text-sm font-bold uppercase tracking-widest ${hasErr('termsAndConditions') ? 'text-red-600' : 'text-blue-700'}`}>
+            Terms &amp; Conditions <span className="text-red-500">*</span>
+          </h2>
         </div>
         <textarea
           value={termsAndConditions}

@@ -12,6 +12,45 @@ export function createAttachment(file: File, data: string): Attachment {
 }
 
 const COLLECTION_KEY = 'invoiceDB_invoices';
+const PREFIX_KEY = 'invoiceDB_prefix';
+
+/** Returns the financial-year start year for a given date.
+ *  India FY runs Apr 1 → Mar 31.
+ *  Jan–Mar 2026  →  FY 2025  (prefix year = 2025)
+ *  Apr–Dec 2026  →  FY 2026  (prefix year = 2026)
+ */
+function fyStartYear(date: Date): number {
+  return date.getMonth() >= 3 ? date.getFullYear() : date.getFullYear() - 1;
+}
+
+export function getInvoicePrefix(): string {
+  return localStorage.getItem(PREFIX_KEY) ?? 'INV';
+}
+
+export function setInvoicePrefix(prefix: string): void {
+  localStorage.setItem(PREFIX_KEY, prefix.trim() || 'INV');
+}
+
+/** Generate the next invoice number.
+ *  Format: {prefix}{FY_YEAR}-{NNNN}  e.g. INV2026-0001
+ *  Finds the highest existing sequence number for the current FY prefix, then increments.
+ */
+export function generateInvoiceNumber(): string {
+  const prefix = getInvoicePrefix();
+  const fyYear = fyStartYear(new Date());
+  const stem = `${prefix}${fyYear}-`;          // e.g. "INV2026-"
+
+  // Only count invoices with status 'saved' — drafts do not hold a sequence number.
+  const collection = getCollection().filter((d) => (d.status ?? 'saved') === 'saved');
+  let max = 0;
+  for (const doc of collection) {
+    if (doc.invoiceNumber.startsWith(stem)) {
+      const seq = parseInt(doc.invoiceNumber.slice(stem.length), 10);
+      if (!isNaN(seq) && seq > max) max = seq;
+    }
+  }
+  return `${stem}${String(max + 1).padStart(4, '0')}`;
+}
 
 function getCollection(): InvoiceDocument[] {
   try {
@@ -70,8 +109,8 @@ export function createLineItem(overrides: Partial<LineItem> = {}): LineItem {
     uom: 'Pcs',
     quantity: 1,
     unitRate: 0,
-    tax: 'GST 18%',
-    taxRate: 18,
+    tax: 'None',
+    taxRate: 0,
     taxableAmount: 0,
     cgstAmount: 0,
     sgstAmount: 0,
@@ -91,16 +130,28 @@ export function createAdditionalCharge(overrides: Partial<AdditionalCharge> = {}
   };
 }
 
+/** Most recently saved invoice (by updatedAt), used to auto-fill company details on new invoices. */
+function getLatestSavedInvoice(): InvoiceDocument | null {
+  const saved = getCollection().filter((d) => (d.status ?? 'saved') === 'saved');
+  if (!saved.length) return null;
+  return saved.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))[0];
+}
+
 export function createBlankInvoice(): Omit<InvoiceDocument, '_id' | 'createdAt' | 'updatedAt'> {
   const today = new Date();
   const due = new Date(today);
   due.setDate(due.getDate() + 30);
 
+  // Carry company identity over from the most recent saved invoice.
+  // Client details and line items stay empty — those change per invoice.
+  const last = getLatestSavedInvoice();
+
   return {
-    invoiceNumber: `INV-${Date.now()}`,
+    invoiceNumber: generateInvoiceNumber(),
+    status: 'saved',
     invoiceDate: today.toISOString().slice(0, 10),
     dueDate: due.toISOString().slice(0, 10),
-    currency: 'INR',
+    currency: last?.currency ?? 'INR',
 
     poNumber: '',
     projectName: '',
@@ -113,15 +164,15 @@ export function createBlankInvoice(): Omit<InvoiceDocument, '_id' | 'createdAt' 
     discountAmount: 0,
     discountedSubtotal: 0,
 
-    companyName: '',
-    companyAddress: '',
-    companyEmail: '',
-    companyPhone: '',
-    companyGst: '',
-    companyLogo: null,
-    companyLocation: blankLocation(),
-    companySeal: null,
-    signature: null,
+    companyName: last?.companyName ?? '',
+    companyAddress: last?.companyAddress ?? '',
+    companyEmail: last?.companyEmail ?? '',
+    companyPhone: last?.companyPhone ?? '',
+    companyGst: last?.companyGst ?? '',
+    companyLogo: last?.companyLogo ?? null,
+    companyLocation: last?.companyLocation ?? blankLocation(),
+    companySeal: last?.companySeal ?? null,
+    signature: last?.signature ?? null,
 
     clientName: '',
     clientAddress: '',
@@ -140,7 +191,6 @@ export function createBlankInvoice(): Omit<InvoiceDocument, '_id' | 'createdAt' 
 
     taxRate: 18,
     subtotal: 0,
-    discountedSubtotal: 0,
     taxAmount: 0,
     totalCGST: 0,
     totalSGST: 0,

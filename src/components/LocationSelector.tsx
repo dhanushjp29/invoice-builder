@@ -7,16 +7,26 @@ interface Props {
   label: string;
   value: LocationData;
   onChange: (data: LocationData) => void;
+  /** Mark all four location fields (Country/State/City/Pincode) as required */
+  requiredLocation?: boolean;
+  /** Per-field error highlights */
+  countryError?: boolean;
+  stateError?: boolean;
+  cityError?: boolean;
+  pincodeError?: boolean;
 }
 
 const BLANK_LOCATION: LocationData = { country: '', state: '', city: '', pincode: '' };
 
-function InputField({ label, value, onChange, placeholder }: {
+function InputField({ label, value, onChange, placeholder, required = false, error = false }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string;
+  required?: boolean; error?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-semibold text-blue-600 uppercase tracking-wide">{label}</label>
+      <label className={`text-xs font-semibold uppercase tracking-wide ${error ? 'text-red-500' : 'text-blue-600'}`}>
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
       <input
         type="text"
         value={value}
@@ -28,7 +38,11 @@ function InputField({ label, value, onChange, placeholder }: {
   );
 }
 
-export default function LocationSelector({ label, value, onChange }: Props) {
+export default function LocationSelector({
+  label, value, onChange,
+  requiredLocation = false,
+  countryError = false, stateError = false, cityError = false, pincodeError = false,
+}: Props) {
   const safe = value ?? BLANK_LOCATION;
 
   // Build option lists. We attach country/state hints via a "value" encoding for cross-search.
@@ -98,6 +112,8 @@ export default function LocationSelector({ label, value, onChange }: Props) {
           options={countryOptions}
           onChange={handleCountry}
           placeholder="Search country…"
+          required={requiredLocation}
+          error={countryError}
         />
         <Combobox
           label="State"
@@ -105,6 +121,8 @@ export default function LocationSelector({ label, value, onChange }: Props) {
           options={stateOptions}
           onChange={handleState}
           placeholder="Search state…"
+          required={requiredLocation}
+          error={stateError}
         />
         <Combobox
           label="City"
@@ -112,12 +130,16 @@ export default function LocationSelector({ label, value, onChange }: Props) {
           options={cityOptions}
           onChange={handleCity}
           placeholder="Search city…"
+          required={requiredLocation}
+          error={cityError}
         />
         <InputField
           label="Pincode"
           value={safe.pincode}
           onChange={(pincode) => onChange({ ...safe, pincode })}
           placeholder="Enter Pincode"
+          required={requiredLocation}
+          error={pincodeError}
         />
       </div>
     </div>

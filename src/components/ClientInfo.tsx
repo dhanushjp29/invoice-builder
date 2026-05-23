@@ -9,30 +9,32 @@ type Field = keyof Pick<
 
 interface Props {
   invoice: InvoiceDocument;
+  errors?: Set<string>;
   onChange: (field: Field, value: string | boolean | LocationData) => void;
 }
 
-function InputField({ label, value, onChange, type = 'text', placeholder = '', required = false }: {
+function InputField({ label, value, onChange, type = 'text', placeholder = '', required = false, error = false, uppercase = false }: {
   label: string; value: string; onChange: (v: string) => void;
-  type?: string; placeholder?: string; required?: boolean;
+  type?: string; placeholder?: string; required?: boolean; error?: boolean; uppercase?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-semibold text-blue-600 uppercase tracking-wide">
+      <label className={`text-xs font-semibold uppercase tracking-wide ${error ? 'text-red-500' : 'text-blue-600'}`}>
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       <input
         type={type}
         value={value}
         placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition placeholder-gray-400"
+        onChange={(e) => onChange(uppercase ? e.target.value.toUpperCase() : e.target.value)}
+        className={`px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition placeholder-gray-400${uppercase ? ' uppercase' : ''}`}
       />
     </div>
   );
 }
 
-export default function ClientInfo({ invoice, onChange }: Props) {
+export default function ClientInfo({ invoice, errors, onChange }: Props) {
+  const hasErr = (key: string) => !!errors?.has(key);
 
   const handleSameAsBilling = (checked: boolean) => {
     onChange('deliverySameAsBilling', checked);
@@ -58,6 +60,8 @@ export default function ClientInfo({ invoice, onChange }: Props) {
               value={invoice.clientName}
               onChange={(v) => onChange('clientName', v)}
               placeholder="Client / Company Name"
+              required
+              error={hasErr('clientName')}
             />
           </div>
           <div className="sm:col-span-2">
@@ -66,6 +70,8 @@ export default function ClientInfo({ invoice, onChange }: Props) {
               value={invoice.clientAddress}
               onChange={(v) => onChange('clientAddress', v)}
               placeholder="Street, Area"
+              required
+              error={hasErr('clientAddress')}
             />
           </div>
           <InputField
@@ -73,7 +79,7 @@ export default function ClientInfo({ invoice, onChange }: Props) {
             value={invoice.clientGst}
             onChange={(v) => onChange('clientGst', v)}
             placeholder="22AAAAA0000A1Z5"
-            required
+            uppercase
           />
           <InputField
             label="Client Email"
@@ -95,6 +101,11 @@ export default function ClientInfo({ invoice, onChange }: Props) {
             label="Billing Location"
             value={invoice.clientLocation}
             onChange={(loc) => onChange('clientLocation', loc)}
+            requiredLocation
+            countryError={hasErr('clientCountry')}
+            stateError={hasErr('clientState')}
+            cityError={hasErr('clientCity')}
+            pincodeError={hasErr('clientPincode')}
           />
         </div>
       </div>

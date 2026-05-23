@@ -167,6 +167,7 @@ export interface InvoiceDocument {
   notes: string;
   termsAndConditions: string;
   paymentMethod: PaymentMethod | '';
+  status: 'draft' | 'saved';
 
   // File attachments (stored as base64 data URLs; not shown in print/preview)
   attachments: Attachment[];

@@ -6,6 +6,7 @@ interface Props {
   value: string; // YYYY-MM-DD
   onChange: (value: string) => void;
   required?: boolean;
+  error?: boolean;
   placeholder?: string;
 }
 
@@ -39,7 +40,7 @@ function sameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-export default function DatePicker({ label, value, onChange, required = false, placeholder }: Props) {
+export default function DatePicker({ label, value, onChange, required = false, error = false, placeholder }: Props) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -121,7 +122,7 @@ export default function DatePicker({ label, value, onChange, required = false, p
   return (
     <div ref={wrapRef} className="flex flex-col gap-1 relative">
       {label && (
-        <label className="text-xs font-semibold text-blue-600 uppercase tracking-wide">
+        <label className={`text-xs font-semibold uppercase tracking-wide ${error ? 'text-red-500' : 'text-blue-600'}`}>
           {label}{required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}

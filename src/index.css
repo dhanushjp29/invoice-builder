@@ -11,9 +11,7 @@ input[type="number"] {
 }
 
 
-@media print {
-  body * { visibility: hidden; }
-  .print\:block, .print\:block * { visibility: visible; }
-  .print\:block { position: absolute; top: 0; left: 0; width: 100%; }
-  .print\:hidden { display: none !important; }
-}
+/* Print styles are not used — printing is handled via PDF blob in a new tab.
+   See src/utils/pdfExport.ts — printAsPdf() generates a PDF and opens it
+   in a new tab where the browser PDF viewer handles printing cleanly,
+   with no URL / date / header injected by the browser. */

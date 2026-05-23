@@ -16,6 +16,9 @@ export default function InvoicePrintView({ invoice, currencySymbol }: Props) {
   const deliveryLocation = invoice.deliverySameAsBilling
     ? invoice.clientLocation
     : invoice.deliveryLocation;
+  // GST is India-only. Non-Indian sellers see a single "Tax Amount" row instead of CGST/SGST/IGST.
+  const isIndianSeller = (invoice.companyLocation?.country ?? '').trim().toUpperCase() === 'IN';
+  const totalTax = invoice.totalCGST + invoice.totalSGST + invoice.totalIGST;
 
   return (
     <div
@@ -124,7 +127,7 @@ export default function InvoicePrintView({ invoice, currencySymbol }: Props) {
           </thead>
           <tbody>
             {invoice.lineItems.map((item, idx) => (
-              <tr key={item._id} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
+              <tr key={item._id} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#fff' : '#f8fafc', pageBreakInside: 'avoid' }}>
                 <td style={{ padding: '9px 10px', fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>{idx + 1}</td>
                 <td style={{ padding: '9px 10px', fontSize: '13px', color: '#1e293b' }}>{item.description || '—'}</td>
                 <td style={{ padding: '9px 10px', fontSize: '12px', color: '#64748b' }}>{item.hsnCode || '—'}</td>
@@ -194,30 +197,30 @@ export default function InvoicePrintView({ invoice, currencySymbol }: Props) {
               </div>
             </>
           )}
-          {!invoice.isExport && (invoice.isIntraState ? (
+          {!invoice.isExport && isIndianSeller && (invoice.isIntraState ? (
             <>
-              {invoice.totalCGST > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 16px', borderBottom: '1px solid #e2e8f0' }}>
-                  <span style={{ fontSize: '13px', color: '#64748b' }}>CGST</span>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>{currencySymbol}{invoice.totalCGST.toFixed(2)}</span>
-                </div>
-              )}
-              {invoice.totalSGST > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 16px', borderBottom: '1px solid #e2e8f0' }}>
-                  <span style={{ fontSize: '13px', color: '#64748b' }}>SGST</span>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>{currencySymbol}{invoice.totalSGST.toFixed(2)}</span>
-                </div>
-              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 16px', borderBottom: '1px solid #e2e8f0' }}>
+                <span style={{ fontSize: '13px', color: '#64748b' }}>CGST</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>{currencySymbol}{invoice.totalCGST.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 16px', borderBottom: '1px solid #e2e8f0' }}>
+                <span style={{ fontSize: '13px', color: '#64748b' }}>SGST</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>{currencySymbol}{invoice.totalSGST.toFixed(2)}</span>
+              </div>
             </>
           ) : (
-            invoice.totalIGST > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 16px', borderBottom: '1px solid #e2e8f0' }}>
-                <span style={{ fontSize: '13px', color: '#64748b' }}>IGST</span>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>{currencySymbol}{invoice.totalIGST.toFixed(2)}</span>
-              </div>
-            )
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 16px', borderBottom: '1px solid #e2e8f0' }}>
+              <span style={{ fontSize: '13px', color: '#64748b' }}>IGST</span>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>{currencySymbol}{invoice.totalIGST.toFixed(2)}</span>
+            </div>
           ))}
-          {invoice.isExport && (
+          {!invoice.isExport && !isIndianSeller && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 16px', borderBottom: '1px solid #e2e8f0' }}>
+              <span style={{ fontSize: '13px', color: '#64748b' }}>Tax Amount</span>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>{currencySymbol}{totalTax.toFixed(2)}</span>
+            </div>
+          )}
+          {invoice.isExport && isIndianSeller && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 16px', borderBottom: '1px solid #e2e8f0', background: '#f0fdf4' }}>
               <span style={{ fontSize: '12px', color: '#047857', fontWeight: 600 }}>GST Exempt · Zero Rated Supply</span>
               <span style={{ fontSize: '12px', color: '#047857', fontWeight: 700 }}>{currencySymbol}0.00</span>

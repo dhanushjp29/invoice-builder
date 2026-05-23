@@ -13,6 +13,8 @@ interface Props {
   placeholder?: string;
   label?: string;
   required?: boolean;
+  /** Render label red and add red ring on the input (used for validation feedback) */
+  error?: boolean;
   /** When true, input style matches a borderless table cell (used inside LineItemsTable) */
   variant?: 'default' | 'cell';
   /** Optional class added to wrapper */
@@ -28,7 +30,7 @@ interface PopupPos {
 }
 
 export default function Combobox({
-  value, options, onChange, placeholder, label, required = false,
+  value, options, onChange, placeholder, label, required = false, error = false,
   variant = 'default', className = '', creatable = false,
 }: Props) {
   const selectedLabel = useMemo(() => {
@@ -143,10 +145,11 @@ export default function Combobox({
     else if (e.key === 'Escape') { e.preventDefault(); closePopup(); }
   }
 
+  const errorRing = '';
   const baseInput =
-    variant === 'cell'
+    (variant === 'cell'
       ? 'w-full px-2 py-1.5 pr-7 rounded-lg border border-transparent bg-transparent text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white focus:border-blue-200 transition placeholder-gray-400 cursor-pointer'
-      : 'w-full px-3 py-2 pr-8 rounded-lg border border-slate-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition placeholder-gray-400 cursor-pointer';
+      : 'w-full px-3 py-2 pr-8 rounded-lg border border-slate-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition placeholder-gray-400 cursor-pointer') + errorRing;
 
   const displayValue = open ? filterText : selectedLabel;
 
@@ -195,7 +198,7 @@ export default function Combobox({
   return (
     <div ref={wrapRef} className={`flex flex-col gap-1 relative ${className}`}>
       {label && (
-        <label className="text-xs font-semibold text-blue-600 uppercase tracking-wide">
+        <label className={`text-xs font-semibold uppercase tracking-wide ${error ? 'text-red-500' : 'text-blue-600'}`}>
           {label}{required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
       )}

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import type { LineItem } from '../types/invoice';
 import { UOM_OPTIONS, TAX_RATES } from '../types/invoice';
 import Combobox from './Combobox';
+import { findAll } from '../db/invoiceDB';
 // TAX_RATES used for legacy fallback on items loaded from old saves
 
 interface Props {
@@ -12,13 +13,34 @@ interface Props {
   onAdd: () => void;
   onUpdate: (id: string, field: keyof Omit<LineItem, '_id' | 'amount'>, value: string | number) => void;
   onDelete: (id: string) => void;
+  /** Called when the user resolves a duplicate-description row by merging into its twin. */
+  onMergeDuplicate: (currentId: string) => void;
 }
 
 const cellInput = "w-full px-2 py-1.5 rounded-lg border border-transparent bg-transparent text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white focus:border-blue-200 transition placeholder-gray-400";
 
-export default function LineItemsTable({ items, currencySymbol, isExport, onAdd, onUpdate, onDelete }: Props) {
+export default function LineItemsTable({ items, currencySymbol, isExport, onAdd, onUpdate, onDelete, onMergeDuplicate }: Props) {
   // Session-only custom UOMs the user has typed. Cleared on page reload.
   const [customUoms, setCustomUoms] = useState<string[]>([]);
+
+  // Description suggestions = every non-empty description seen across saved invoices
+  // and the items currently on the page. Deduped case-insensitively. Computed once
+  // per items[] change — saved invoices don't update mid-session.
+  const descriptionOptions = useMemo(() => {
+    const fromDB = findAll().flatMap((inv) => inv.lineItems.map((li) => li.description));
+    const fromCurrent = items.map((i) => i.description);
+    const seen = new Set<string>();
+    const out: { value: string; label: string }[] = [];
+    [...fromDB, ...fromCurrent].forEach((d) => {
+      const trimmed = (d || '').trim();
+      if (!trimmed) return;
+      const k = trimmed.toLowerCase();
+      if (seen.has(k)) return;
+      seen.add(k);
+      out.push({ value: trimmed, label: trimmed });
+    });
+    return out;
+  }, [items]);
 
   // Surface any custom UOMs already present in items (e.g. saved earlier in this session)
   const uomOptions = useMemo(() => {
@@ -56,14 +78,14 @@ export default function LineItemsTable({ items, currencySymbol, isExport, onAdd,
           <thead>
             <tr className="bg-blue-50/60 border-b border-blue-100">
               <th className="text-left px-3 py-3 text-xs font-bold text-blue-600 uppercase tracking-wider w-8">#</th>
-              <th className="text-left px-3 py-3 text-xs font-bold text-blue-600 uppercase tracking-wider min-w-40">Description</th>
+              <th className="text-left px-3 py-3 text-xs font-bold text-blue-600 uppercase tracking-wider min-w-40">Description <span className="text-red-500">*</span></th>
               <th className="text-left px-3 py-3 text-xs font-bold text-blue-600 uppercase tracking-wider w-24">HSN Code</th>
               <th className="text-left px-3 py-3 text-xs font-bold text-blue-600 uppercase tracking-wider w-24">UOM <span className="text-red-500">*</span></th>
-              <th className="text-right px-3 py-3 text-xs font-bold text-blue-600 uppercase tracking-wider w-20">Qty</th>
-              <th className="text-right px-3 py-3 text-xs font-bold text-blue-600 uppercase tracking-wider w-28">Rate ({currencySymbol})</th>
+              <th className="text-right px-3 py-3 text-xs font-bold text-blue-600 uppercase tracking-wider w-20">Qty <span className="text-red-500">*</span></th>
+              <th className="text-right px-3 py-3 text-xs font-bold text-blue-600 uppercase tracking-wider w-28">Rate ({currencySymbol}) <span className="text-red-500">*</span></th>
               {!isExport && (
                 <>
-                  <th className="text-left px-3 py-3 text-xs font-bold text-blue-600 uppercase tracking-wider w-20">Tax % <span className="text-red-500">*</span></th>
+                  <th className="text-left px-3 py-3 text-xs font-bold text-blue-600 uppercase tracking-wider w-20">Tax %</th>
                   <th className="text-right px-3 py-3 text-xs font-bold text-blue-600 uppercase tracking-wider w-26">Tax Amt ({currencySymbol})</th>
                 </>
               )}
@@ -91,17 +113,36 @@ export default function LineItemsTable({ items, currencySymbol, isExport, onAdd,
                         items.some((o) => o._id !== item._id && o.description.trim().toLowerCase() === item.description.trim().toLowerCase());
                       return (
                         <div className="relative">
-                          <input
-                            type="text"
+                          <Combobox
+                            variant="cell"
                             value={item.description}
+                            options={descriptionOptions}
+                            onChange={(v) => onUpdate(item._id, 'description', v)}
                             placeholder="Item description…"
-                            onChange={(e) => onUpdate(item._id, 'description', e.target.value)}
-                            className={`${cellInput} ${isDupDesc ? 'ring-2 ring-red-400 border-red-300 bg-red-50' : ''}`}
+                            creatable
+                            error={isDupDesc}
                           />
                           {isDupDesc && (
-                            <span className="absolute -top-5 left-0 text-[10px] text-red-500 font-semibold whitespace-nowrap">
-                              Duplicate description
-                            </span>
+                            <div className="absolute -top-5 left-0 z-10 flex items-center gap-1 whitespace-nowrap">
+                              <span className="text-[10px] text-red-500 font-semibold">Duplicate —</span>
+                              <button
+                                type="button"
+                                onClick={() => onMergeDuplicate(item._id)}
+                                title="Sum this row's quantity into the existing matching row, then delete this row"
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 hover:bg-blue-200 transition"
+                              >
+                                Sum into existing
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onDelete(item._id)}
+                                disabled={items.length === 1}
+                                title="Delete this row"
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700 hover:bg-red-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                Delete this row
+                              </button>
+                            </div>
                           )}
                         </div>
                       );
