@@ -1,6 +1,8 @@
 import { useRef } from 'react';
 import type { Attachment } from '../types/invoice';
 import { createAttachment } from '../db/invoiceDB';
+import { deleteAttachment, getAttachmentBlob, putAttachment } from '../db/attachmentStore';
+import { openAttachmentInNewTab } from '../utils/attachmentView';
 
 interface Props {
   attachments: Attachment[];
@@ -97,55 +99,85 @@ function mimeLabel(mimeType: string): string {
   return sub?.toUpperCase() ?? type.toUpperCase();
 }
 
+/** Resolve an Attachment to its actual Blob, regardless of storage layout.
+ *  - New attachments: read from IndexedDB by `blobId`.
+ *  - Legacy attachments (pre-migration): decode the inline base64 `data` URL. */
+async function resolveBlob(att: Attachment): Promise<Blob | null> {
+  if (att.blobId) return getAttachmentBlob(att.blobId);
+  if (att.data) return dataUrlToBlob(att.data, att.mimeType);
+  return null;
+}
+
+function dataUrlToBlob(dataUrl: string, fallbackMime: string): Blob | null {
+  const match = dataUrl.match(/^data:([^;,]*)(;base64)?,(.*)$/);
+  if (!match) return null;
+  const mime = match[1] || fallbackMime;
+  const isBase64 = !!match[2];
+  const payload = match[3];
+  let bytes: Uint8Array;
+  if (isBase64) {
+    const bin = atob(payload);
+    bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  } else {
+    const dec = decodeURIComponent(payload);
+    bytes = new Uint8Array(dec.length);
+    for (let i = 0; i < dec.length; i++) bytes[i] = dec.charCodeAt(i);
+  }
+  // Copy into a fresh ArrayBuffer to satisfy strict BlobPart typing.
+  const ab = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(ab).set(bytes);
+  return new Blob([ab], { type: mime });
+}
+
 export default function FileAttachments({ attachments, onChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  function handleFiles(files: FileList | null) {
+  async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const toRead = Array.from(files);
-    let done = 0;
-    const newAttachments: Attachment[] = [];
-
-    toRead.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const data = e.target?.result as string;
-        newAttachments.push(createAttachment(file, data));
-        done++;
-        if (done === toRead.length) {
-          onChange([...attachments, ...newAttachments]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    // Persist each File to IndexedDB first, then build the metadata record
+    // that goes into the invoice JSON. The Blob bytes never touch React state.
+    const added = await Promise.all(
+      Array.from(files).map(async (file) => {
+        const blobId = await putAttachment(file);
+        return createAttachment(file, blobId);
+      }),
+    );
+    onChange([...attachments, ...added]);
   }
 
-  function handleView(att: Attachment) {
-    const win = window.open();
-    if (!win) return;
-    if (att.mimeType.startsWith('image/')) {
-      win.document.write(`<html><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${att.data}" style="max-width:100%;max-height:100vh;object-fit:contain" /></body></html>`);
-    } else {
-      // For PDF and other viewable types, embed via iframe; for others open data URL directly
-      win.document.write(`<html><body style="margin:0;padding:0;height:100vh"><iframe src="${att.data}" style="width:100%;height:100%;border:none" title="${att.name}"></iframe></body></html>`);
-    }
-    win.document.title = att.name;
+  async function handleView(att: Attachment) {
+    const blob = await resolveBlob(att);
+    if (!blob) return;
+    openAttachmentInNewTab(blob, att.name);
   }
 
-  function handleDownload(att: Attachment) {
+  async function handleDownload(att: Attachment) {
+    const blob = await resolveBlob(att);
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = att.data;
+    a.href = url;
     a.download = att.name;
+    document.body.appendChild(a);
     a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
   }
 
   function handleRemove(id: string) {
+    const target = attachments.find((a) => a._id === id);
+    if (target?.blobId) deleteAttachment(target.blobId).catch(() => { /* best effort */ });
     onChange(attachments.filter((a) => a._id !== id));
+  }
+
+  function handleToggleIncludeInMail(id: string, checked: boolean) {
+    onChange(attachments.map((a) => a._id === id ? { ...a, includeInMail: checked } : a));
   }
 
   function handleDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
-    handleFiles(e.dataTransfer.files);
+    void handleFiles(e.dataTransfer.files);
   }
 
   return (
@@ -177,7 +209,7 @@ export default function FileAttachments({ attachments, onChange }: Props) {
             type="file"
             multiple
             className="hidden"
-            onChange={(e) => handleFiles(e.target.files)}
+            onChange={(e) => void handleFiles(e.target.files)}
             onClick={(e) => { (e.target as HTMLInputElement).value = ''; }}
           />
         </div>
@@ -197,6 +229,16 @@ export default function FileAttachments({ attachments, onChange }: Props) {
                 <p className="text-sm font-semibold text-gray-800 truncate">{att.name}</p>
                 <p className="text-xs text-slate-400">{mimeLabel(att.mimeType)} · {formatBytes(att.size)}</p>
               </div>
+
+              <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg cursor-pointer select-none hover:bg-blue-100/60 transition" title="Attach this file to the email">
+                <input
+                  type="checkbox"
+                  checked={!!att.includeInMail}
+                  onChange={(e) => handleToggleIncludeInMail(att._id, e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-400 cursor-pointer"
+                />
+                <span className="text-xs font-semibold text-slate-600">Include In Mail</span>
+              </label>
 
               <div className="flex items-center gap-1">
                 <button

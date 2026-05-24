@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
 import toast, { Toaster } from 'react-hot-toast';
+import { useNavigate, useParams } from 'react-router-dom';
+import { getAttachmentBlob } from '../db/attachmentStore';
 import { findOne } from '../db/invoiceDB';
+import type { InvoiceDocument } from '../types/invoice';
 import { CURRENCY_OPTIONS } from '../types/invoice';
+import { openAttachmentInNewTab } from '../utils/attachmentView';
+import { disconnect, getConnection, sendInvoiceEmail, startGmailConnect, type MailAttachment } from '../utils/gmailClient';
+import { blobToBase64 } from '../utils/pdfBase64';
+import { generatePdfBlob } from '../utils/pdfExport';
 import { recalculate } from '../utils/recalculate';
 import InvoicePrintView from './InvoicePrintView';
-import { getConnection, startGmailConnect, disconnect, sendInvoiceEmail } from '../utils/gmailClient';
-import { generatePdfBlob } from '../utils/pdfExport';
-import { blobToBase64 } from '../utils/pdfBase64';
 
 export default function MailPreview() {
   const { id } = useParams<{ id: string }>();
@@ -21,11 +24,11 @@ export default function MailPreview() {
 
   const defaultBodyText = invoice
     ? `Dear ${invoice.clientName},\n\n` +
-      `Please find your invoice ${invoice.invoiceNumber} dated ${invoice.invoiceDate}.\n\n` +
-      `Amount Due: ${currencyInfo.symbol}${invoice.grandTotal.toFixed(2)}\n` +
-      `Due Date: ${invoice.dueDate}\n\n` +
-      `Kindly arrange the payment at the earliest. The full invoice is attached as a PDF.\n\n` +
-      `Regards,\n${invoice.companyName}`
+    `Please find your invoice ${invoice.invoiceNumber} dated ${invoice.invoiceDate}.\n\n` +
+    `Amount Due: ${currencyInfo.symbol}${invoice.grandTotal.toFixed(2)}\n` +
+    `Due Date: ${invoice.dueDate}\n\n` +
+    `Kindly arrange the payment at the earliest. The full invoice is attached as a PDF.\n\n` +
+    `Regards,\n${invoice.companyName}`
     : '';
 
   // ── All hooks must run before any early return ──
@@ -90,17 +93,21 @@ export default function MailPreview() {
       const pdfBase64 = await blobToBase64(pdfBlob);
       console.log('[Mail] PDF base64 ready, length:', pdfBase64.length);
 
+      const mailAttachments = await collectMailAttachments(invoice!);
+      console.log('[Mail] extra attachments:', mailAttachments.map((a) => a.filename));
+
       await sendInvoiceEmail({
         to: to.trim(),
         subject: subject.trim(),
         html,
         pdfBase64,
         pdfFilename: `${invoice!.invoiceNumber || 'invoice'}.pdf`,
+        attachments: mailAttachments,
       });
 
       console.log('[Mail] Sent OK');
       toast.success('Email sent!');
-      setTimeout(() => window.close(), 800);
+      setTimeout(() => navigate(`/invoice/${invoice!._id}/preview`), 800);
     } catch (err) {
       console.error('[Mail] Send failed:', err);
       toast.error(err instanceof Error ? err.message : 'Send failed.');
@@ -156,10 +163,10 @@ export default function MailPreview() {
               </button>
             )}
             <button
-              onClick={() => navigate(-1)}
+              onClick={() => navigate(`/invoice/${invoice._id}/preview`)}
               className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 transition border border-slate-200"
             >
-              Close
+              Back
             </button>
           </div>
         </div>
@@ -213,6 +220,39 @@ export default function MailPreview() {
           <p className="text-[11px] text-slate-400 ml-[76px]">
             The invoice will be embedded as HTML and attached as a PDF.
           </p>
+
+          {/* Attachments — the invoice PDF + every file the user ticked
+              "Include In Mail" on in the editor. Each chip opens the file
+              in a new tab so the user can verify what's being sent. */}
+          <div className="flex items-start gap-3 pt-3 border-t border-slate-100">
+            <label className="text-xs font-bold text-slate-500 w-16 uppercase tracking-wider mt-1.5">Files</label>
+            <div className="flex-1 flex flex-wrap gap-2">
+              <AttachmentChip
+                name={`${invoice.invoiceNumber || 'invoice'}.pdf`}
+                hint="Invoice (auto)"
+              />
+              {(invoice.attachments ?? [])
+                .filter((a) => a.includeInMail)
+                .map((a) => (
+                  <AttachmentChip
+                    key={a._id}
+                    name={a.name}
+                    hint={formatBytes(a.size)}
+                    onView={async () => {
+                      const blob = a.blobId
+                        ? await getAttachmentBlob(a.blobId)
+                        : (a.data ? dataUrlStringToBlob(a.data, a.mimeType) : null);
+                      if (blob) openAttachmentInNewTab(blob, a.name);
+                    }}
+                  />
+                ))}
+              {(invoice.attachments ?? []).every((a) => !a.includeInMail) && (
+                <p className="text-[11px] text-slate-400 self-center">
+                  No extra files. Tick "Include In Mail" on any file in the editor to attach it.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Invoice preview (provides #invoice-print-area for both HTML and PDF) */}
@@ -224,6 +264,49 @@ export default function MailPreview() {
   );
 }
 
+function AttachmentChip({ name, hint, onView }: { name: string; hint: string; onView?: () => void }) {
+  const baseClass = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border max-w-full';
+  const body = (
+    <>
+      <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+      </svg>
+      <span className="text-xs font-semibold text-slate-700 truncate max-w-[16rem]" title={name}>{name}</span>
+      <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap">{hint}</span>
+      {onView && (
+        <svg className="w-3 h-3 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M14 5l7 7m0 0l-7 7m7-7H3" />
+        </svg>
+      )}
+    </>
+  );
+
+  if (onView) {
+    return (
+      <button
+        type="button"
+        onClick={onView}
+        title={`Open ${name} in new tab`}
+        className={`${baseClass} border-blue-200 bg-blue-50/60 hover:bg-blue-100 hover:border-blue-300 transition cursor-pointer`}
+      >
+        {body}
+      </button>
+    );
+  }
+
+  return (
+    <div className={`${baseClass} border-slate-200 bg-slate-50`}>{body}</div>
+  );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -231,4 +314,92 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/** Split a data URL into mime type + raw base64. Returns null for non-data URLs. */
+function parseDataUrl(dataUrl: string | null | undefined): { mimeType: string; base64: string } | null {
+  if (!dataUrl) return null;
+  const m = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
+  if (!m) return null;
+  return { mimeType: m[1], base64: m[2] };
+}
+
+/** Legacy: decode an inline base64 data URL into a Blob for View on
+ *  pre-migration attachments. New uploads bypass this and go straight to
+ *  IndexedDB. */
+function dataUrlStringToBlob(dataUrl: string, fallbackMime: string): Blob | null {
+  const m = dataUrl.match(/^data:([^;,]*)(;base64)?,(.*)$/);
+  if (!m) return null;
+  const mime = m[1] || fallbackMime;
+  const isBase64 = !!m[2];
+  const payload = m[3];
+  let bytes: Uint8Array;
+  if (isBase64) {
+    const bin = atob(payload);
+    bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  } else {
+    const dec = decodeURIComponent(payload);
+    bytes = new Uint8Array(dec.length);
+    for (let i = 0; i < dec.length; i++) bytes[i] = dec.charCodeAt(i);
+  }
+  const ab = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(ab).set(bytes);
+  return new Blob([ab], { type: mime });
+}
+
+function blobToBase64NoPrefix(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const s = r.result as string;
+      const comma = s.indexOf(',');
+      resolve(comma === -1 ? s : s.slice(comma + 1));
+    };
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+/** Collect the user-checked file attachments for the email.
+ *  Branding (logo / seal / signature) is intentionally NOT attached separately —
+ *  those images already appear inline inside the invoice preview HTML, so
+ *  attaching them again would just show duplicates at the bottom of Gmail.
+ *
+ *  New attachments live in IndexedDB (read via `blobId`). Legacy attachments
+ *  may still carry inline `data:` base64 from before the migration. */
+async function collectMailAttachments(invoice: InvoiceDocument): Promise<MailAttachment[]> {
+  const out: MailAttachment[] = [];
+
+  for (const att of invoice.attachments ?? []) {
+    if (!att.includeInMail) continue;
+
+    if (att.blobId) {
+      const blob = await getAttachmentBlob(att.blobId);
+      if (!blob) {
+        console.warn('[Mail] Skipping attachment — blob missing in IndexedDB:', att.name);
+        continue;
+      }
+      out.push({
+        filename: att.name,
+        mimeType: att.mimeType || blob.type || 'application/octet-stream',
+        base64: await blobToBase64NoPrefix(blob),
+      });
+      continue;
+    }
+
+    // Legacy inline data URL path
+    const parsed = parseDataUrl(att.data);
+    if (!parsed) {
+      console.warn('[Mail] Skipping attachment with no blob and no data URL:', att.name);
+      continue;
+    }
+    out.push({
+      filename: att.name,
+      mimeType: att.mimeType || parsed.mimeType,
+      base64: parsed.base64,
+    });
+  }
+
+  return out;
 }

@@ -150,11 +150,18 @@ export default function ClientInfo({ invoice, errors, onChange }: Props) {
                 value={invoice.deliveryAddress}
                 onChange={(v) => onChange('deliveryAddress', v)}
                 placeholder="Street, Area"
+                required
+                error={hasErr('deliveryAddress')}
               />
               <LocationSelector
                 label="Delivery Location"
                 value={invoice.deliveryLocation}
                 onChange={(loc) => onChange('deliveryLocation', loc)}
+                requiredLocation
+                requiredPincode={false}
+                countryError={hasErr('deliveryCountry')}
+                stateError={hasErr('deliveryState')}
+                cityError={hasErr('deliveryCity')}
               />
             </>
           )}

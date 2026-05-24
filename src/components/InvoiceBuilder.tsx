@@ -18,7 +18,9 @@ import LineItemsTable from './LineItemsTable';
 import NavGuardModal from './NavGuardModal';
 import PreviewBar from './PreviewBar';
 
-const initialIdFromUrl = window.location.pathname.match(/^\/invoice\/([^/]+?)(?:\/preview)?$/)?.[1] ?? null;
+function parseIdFromPath(path: string): string | null {
+  return path.match(/^\/invoice\/([^/]+?)(?:\/preview)?$/)?.[1] ?? null;
+}
 
 export default function InvoiceBuilder() {
   const routerNavigate = useRouterNavigate();
@@ -27,7 +29,10 @@ export default function InvoiceBuilder() {
   const isPreviewMode = /\/preview$/.test(location.pathname);
 
   const [invoice, setInvoice] = useState<InvoiceDocument>(() => {
-    const idFromUrl = initialIdFromUrl;
+    // Read the id from the *current* URL each time we mount. We used to read
+    // a module-level snapshot, which meant returning here from /mail still
+    // showed whatever was open at app start instead of the requested invoice.
+    const idFromUrl = parseIdFromPath(window.location.pathname);
     if (idFromUrl && idFromUrl !== 'new') {
       const found = findOne(idFromUrl);
       if (found) {
@@ -79,6 +84,16 @@ export default function InvoiceBuilder() {
         if (loc?.pincode?.trim()) out.push('clientPincode');
         return out;
       }
+      case 'deliveryAddress': return ['deliveryAddress'];
+      case 'deliveryLocation': {
+        const loc = value as { country?: string; state?: string; city?: string; pincode?: string } | undefined;
+        const out: string[] = [];
+        if (loc?.country?.trim()) out.push('deliveryCountry');
+        if (loc?.state?.trim()) out.push('deliveryState');
+        if (loc?.city?.trim()) out.push('deliveryCity');
+        return out;
+      }
+      case 'deliverySameAsBilling': return ['deliveryAddress', 'deliveryCountry', 'deliveryState', 'deliveryCity'];
       case 'invoiceNumber': return ['invoiceNumber'];
       case 'invoiceDate': return ['invoiceDate'];
       case 'paymentMethod': return ['paymentMethod'];
@@ -188,9 +203,15 @@ export default function InvoiceBuilder() {
     routerNavigate(stayPreview ? `/invoice/${id}/preview` : `/invoice/${id}`);
   };
 
-  // Guard helper: pendingNavId is either an invoice _id OR the sentinel '__list__'
+  // Guard helper: pendingNavId is either an invoice _id, '__list__', '__new__', or '__preview__:<id>'.
   const doNav = (target: string) => {
     if (target === '__list__') { routerNavigate('/'); return; }
+    if (target === '__new__') { handleNew(); return; }
+    if (target.startsWith('__preview__:')) {
+      const id = target.slice('__preview__:'.length);
+      routerNavigate(`/invoice/${id}/preview`);
+      return;
+    }
     handleSelectInvoice(target);
   };
 
@@ -198,6 +219,12 @@ export default function InvoiceBuilder() {
   const handleSidebarClick = (id: string) => {
     if (isDirty && invoice._id !== id) setPendingNavId(id);
     else handleSelectInvoice(id);
+  };
+
+  // Sidebar "+" — start a new invoice, guarding if there are unsaved changes
+  const handleSidebarNew = () => {
+    if (isDirty) setPendingNavId('__new__');
+    else handleNew();
   };
 
   // Called by "← All Invoices" nav button — guards if dirty
@@ -274,6 +301,15 @@ export default function InvoiceBuilder() {
     if (!invoice.clientLocation?.state?.trim()) { found.add('clientState'); missingLabels.push('Client State'); }
     if (!invoice.clientLocation?.city?.trim()) { found.add('clientCity'); missingLabels.push('Client City'); }
     if (!invoice.clientLocation?.pincode?.trim()) { found.add('clientPincode'); missingLabels.push('Client Pincode'); }
+
+    // Delivery Address — only required when it isn't a copy of the billing address.
+    if (!invoice.deliverySameAsBilling) {
+      if (!invoice.deliveryAddress.trim()) { found.add('deliveryAddress'); missingLabels.push('Delivery Address'); }
+      if (!invoice.deliveryLocation?.country?.trim()) { found.add('deliveryCountry'); missingLabels.push('Delivery Country'); }
+      if (!invoice.deliveryLocation?.state?.trim()) { found.add('deliveryState'); missingLabels.push('Delivery State'); }
+      if (!invoice.deliveryLocation?.city?.trim()) { found.add('deliveryCity'); missingLabels.push('Delivery City'); }
+    }
+
     if (!invoice.invoiceNumber.trim()) { found.add('invoiceNumber'); missingLabels.push('Invoice Number'); }
     if (!invoice.invoiceDate.trim()) { found.add('invoiceDate'); missingLabels.push('Invoice Date'); }
     if (!invoice.paymentMethod.trim()) { found.add('paymentMethod'); missingLabels.push('Payment Method'); }
@@ -350,13 +386,26 @@ export default function InvoiceBuilder() {
     }
   };
 
-  // Mail — open user's default mail client with prefilled subject/body
+  // Mail — navigate to the in-app mail composer (same tab, react-router).
+  // If there are unsaved changes (e.g. toggling "Include In Mail" on an attachment),
+  // persist them first so MailPreview reads the fresh state from storage.
   const handleMail = () => {
     if (!invoice._id) {
       toast.error('Save the invoice before sending.');
       return;
     }
-    window.open(`/invoice/${invoice._id}/mail`, '_blank');
+    if (!invoice.clientEmail.trim()) {
+      toast.error('Add a client email before sending.');
+      return;
+    }
+    if (isDirty) {
+      const saved = updateOne(invoice._id, invoice);
+      if (!saved) { toast.error('Could not save changes before opening mail.'); return; }
+      setInvoice(saved);
+      setAllInvoices(findAll());
+      setIsDirty(false);
+    }
+    routerNavigate(`/invoice/${invoice._id}/mail`);
   };
 
   // Ctrl+P / Cmd+P — print as PDF if saved, toast if not
@@ -379,11 +428,23 @@ export default function InvoiceBuilder() {
   const handlePreviewToggle = () => {
     const id = invoice._id || 'new';
     if (isPreviewMode) {
+      // Going from preview back to editor — never dirty here.
       routerNavigate(`/invoice/${id}`);
-    } else {
-      if (!validate()) return;
-      routerNavigate(`/invoice/${id}/preview`);
+      return;
     }
+    // Editor → Preview. If the user has unsaved changes, surface the same
+    // save-or-discard modal used for sidebar nav so the preview reflects the
+    // saved state.
+    if (isDirty) {
+      if (!invoice._id) {
+        // New (never persisted) invoice — must validate before saving as anything.
+        if (!validate()) return;
+      }
+      setPendingNavId(`__preview__:${id}`);
+      return;
+    }
+    if (!validate()) return;
+    routerNavigate(`/invoice/${id}/preview`);
   };
 
   return (
@@ -441,7 +502,7 @@ export default function InvoiceBuilder() {
             {!isListMode && (<>
             <button
               onClick={handlePreviewToggle}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold text-emerald-700 bg-linear-to-b from-emerald-200/70 to-emerald-300/60 hover:from-emerald-300/80 hover:to-emerald-400/70 border border-emerald-300/70 backdrop-blur-sm shadow-sm shadow-emerald-500/20 ring-1 ring-white/40 transition"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -487,7 +548,7 @@ export default function InvoiceBuilder() {
               invoices={allInvoices}
               activeId={invoice._id}
               onSelect={handleSidebarClick}
-              onNew={handleNew}
+              onNew={handleSidebarNew}
             />
 
             {/* ── Right panel: editor or preview ── */}

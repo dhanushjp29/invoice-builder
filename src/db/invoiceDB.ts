@@ -1,13 +1,17 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { InvoiceDocument, LineItem, AdditionalCharge, LocationData, Attachment } from '../types/invoice';
 
-export function createAttachment(file: File, data: string): Attachment {
+/** Build an Attachment metadata record. The actual file bytes live in
+ *  IndexedDB under `blobId`; this record only carries the pointer + metadata
+ *  that needs to survive inside the invoice JSON. */
+export function createAttachment(file: File, blobId: string): Attachment {
   return {
     _id: uuidv4(),
     name: file.name,
     mimeType: file.type || 'application/octet-stream',
     size: file.size,
-    data,
+    blobId,
+    includeInMail: false,
   };
 }
 
@@ -93,9 +97,19 @@ export function updateOne(id: string, updates: Partial<InvoiceDocument>): Invoic
 
 export function deleteOne(id: string): boolean {
   const collection = getCollection();
+  const target = collection.find((d) => d._id === id);
   const filtered = collection.filter((d) => d._id !== id);
   if (filtered.length === collection.length) return false;
   saveCollection(filtered);
+  // Fire-and-forget: free the file blobs that belonged to this invoice.
+  // Failures are non-fatal — the worst case is an orphan blob, not data loss.
+  if (target) {
+    import('./attachmentStore').then(({ deleteAttachment }) => {
+      for (const att of target.attachments ?? []) {
+        if (att.blobId) deleteAttachment(att.blobId).catch(() => { /* ignore */ });
+      }
+    });
+  }
   return true;
 }
 

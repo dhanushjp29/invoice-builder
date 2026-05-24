@@ -26,69 +26,84 @@ export default function InvoicePrintView({ invoice, currencySymbol }: Props) {
       className="bg-white w-full font-sans"
       style={{ fontFamily: 'Arial, sans-serif', color: '#1e293b' }}
     >
-      {/* Header */}
-      <div style={{ background: '#fff', padding: '28px 36px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e2e8f0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          {invoice.companyLogo && (
-            <img src={invoice.companyLogo} alt="Logo" style={{ width: '64px', height: '64px', objectFit: 'contain', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '4px' }} />
-          )}
-          <div>
-            <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a' }}>{invoice.companyName || 'Your Company'}</div>
-            {invoice.companyAddress && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{invoice.companyAddress}</div>}
-            {locationStr(invoice.companyLocation) && <div style={{ fontSize: '12px', color: '#64748b' }}>{locationStr(invoice.companyLocation)}</div>}
-            {invoice.companyGst && <div style={{ fontSize: '12px', color: '#64748b' }}>GST: <strong>{invoice.companyGst}</strong></div>}
-            {invoice.companyEmail && <div style={{ fontSize: '12px', color: '#64748b' }}>{invoice.companyEmail}</div>}
-            {invoice.companyPhone && <div style={{ fontSize: '12px', color: '#64748b' }}>{invoice.companyPhone}</div>}
-          </div>
-        </div>
+      {/* Header — table-based so email clients (Gmail/Outlook) render the
+          two-column split reliably; flex/grid are unreliable in many MUAs. */}
+      <table role="presentation" cellPadding={0} cellSpacing={0} style={{ width: '100%', borderCollapse: 'collapse', borderBottom: '2px solid #e2e8f0' }}>
+        <tbody>
+          <tr>
+            <td style={{ padding: '28px 36px', verticalAlign: 'top', width: '60%' }}>
+              <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse' }}>
+                <tbody>
+                  <tr>
+                    {invoice.companyLogo && (
+                      <td style={{ verticalAlign: 'top', paddingRight: '16px' }}>
+                        <img src={invoice.companyLogo} alt="Logo" style={{ width: '64px', height: '64px', objectFit: 'contain', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '4px', display: 'block' }} />
+                      </td>
+                    )}
+                    <td style={{ verticalAlign: 'top' }}>
+                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a' }}>{invoice.companyName || 'Your Company'}</div>
+                      {invoice.companyAddress && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{invoice.companyAddress}</div>}
+                      {locationStr(invoice.companyLocation) && <div style={{ fontSize: '12px', color: '#64748b' }}>{locationStr(invoice.companyLocation)}</div>}
+                      {invoice.companyGst && <div style={{ fontSize: '12px', color: '#64748b' }}>GST: <strong>{invoice.companyGst}</strong></div>}
+                      {invoice.companyEmail && <div style={{ fontSize: '12px', color: '#64748b' }}>{invoice.companyEmail}</div>}
+                      {invoice.companyPhone && <div style={{ fontSize: '12px', color: '#64748b' }}>{invoice.companyPhone}</div>}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </td>
+            <td style={{ padding: '28px 36px', verticalAlign: 'top', textAlign: 'right', width: '40%' }}>
+              <div style={{ display: 'inline-block', border: '2px solid #2563eb', borderRadius: '10px', padding: '6px 22px', marginBottom: '12px' }}>
+                <span style={{ fontSize: '18px', fontWeight: 800, color: '#2563eb', letterSpacing: '0.12em' }}>
+                  {invoice.isExport ? 'EXPORT INVOICE' : 'INVOICE'}
+                </span>
+              </div>
+              {invoice.isExport && (
+                <div style={{ marginBottom: '8px' }}>
+                  <span style={{
+                    display: 'inline-block', fontSize: '10px', fontWeight: 700,
+                    color: '#047857', background: '#ecfdf5', border: '1px solid #a7f3d0',
+                    borderRadius: '999px', padding: '2px 8px', letterSpacing: '0.08em', textTransform: 'uppercase',
+                  }}>
+                    GST Exempt · Zero Rated Supply
+                  </span>
+                </div>
+              )}
+              <div style={{ fontSize: '13px', color: '#64748b' }}><strong style={{ color: '#0f172a' }}>#</strong> {invoice.invoiceNumber || '—'}</div>
+              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px' }}>Date: <strong style={{ color: '#0f172a' }}>{invoice.invoiceDate || '—'}</strong></div>
+              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Due: <strong style={{ color: '#0f172a' }}>{invoice.dueDate || '—'}</strong></div>
+              {invoice.poNumber && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>PO No: <strong style={{ color: '#0f172a' }}>{invoice.poNumber}</strong></div>}
+              {invoice.projectName && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Project: <strong style={{ color: '#0f172a' }}>{invoice.projectName}</strong></div>}
+              {invoice.eWayBillNumber && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>E-Way Bill: <strong style={{ color: '#0f172a' }}>{invoice.eWayBillNumber}</strong></div>}
+              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Currency: <strong style={{ color: '#0f172a' }}>{invoice.currency}</strong></div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ display: 'inline-block', border: '2px solid #2563eb', borderRadius: '10px', padding: '6px 22px', marginBottom: '12px' }}>
-            <span style={{ fontSize: '18px', fontWeight: 800, color: '#2563eb', letterSpacing: '0.12em' }}>
-              {invoice.isExport ? 'EXPORT INVOICE' : 'INVOICE'}
-            </span>
-          </div>
-          {invoice.isExport && (
-            <div style={{ marginBottom: '8px' }}>
-              <span style={{
-                display: 'inline-block', fontSize: '10px', fontWeight: 700,
-                color: '#047857', background: '#ecfdf5', border: '1px solid #a7f3d0',
-                borderRadius: '999px', padding: '2px 8px', letterSpacing: '0.08em', textTransform: 'uppercase',
-              }}>
-                GST Exempt · Zero Rated Supply
-              </span>
-            </div>
-          )}
-          <div style={{ fontSize: '13px', color: '#64748b' }}><strong style={{ color: '#0f172a' }}>#</strong> {invoice.invoiceNumber || '—'}</div>
-          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px' }}>Date: <strong style={{ color: '#0f172a' }}>{invoice.invoiceDate || '—'}</strong></div>
-          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Due: <strong style={{ color: '#0f172a' }}>{invoice.dueDate || '—'}</strong></div>
-          {invoice.poNumber && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>PO No: <strong style={{ color: '#0f172a' }}>{invoice.poNumber}</strong></div>}
-          {invoice.projectName && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Project: <strong style={{ color: '#0f172a' }}>{invoice.projectName}</strong></div>}
-          {invoice.eWayBillNumber && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>E-Way Bill: <strong style={{ color: '#0f172a' }}>{invoice.eWayBillNumber}</strong></div>}
-          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Currency: <strong style={{ color: '#0f172a' }}>{invoice.currency}</strong></div>
-        </div>
-      </div>
-
-      {/* Bill To + Ship To */}
-      <div style={{ padding: '20px 36px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '40px' }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px' }}>Bill To</div>
-          <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>{invoice.clientName || '—'}</div>
-          {invoice.clientAddress && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{invoice.clientAddress}</div>}
-          {locationStr(invoice.clientLocation) && <div style={{ fontSize: '12px', color: '#64748b' }}>{locationStr(invoice.clientLocation)}</div>}
-          {invoice.clientGst && <div style={{ fontSize: '12px', color: '#64748b' }}>GST: <strong>{invoice.clientGst}</strong></div>}
-          {invoice.clientEmail && <div style={{ fontSize: '12px', color: '#64748b' }}>{invoice.clientEmail}</div>}
-          {invoice.clientPhone && <div style={{ fontSize: '12px', color: '#64748b' }}>{invoice.clientPhone}</div>}
-        </div>
-
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px' }}>Ship To</div>
-          {invoice.siteName && <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '2px' }}>{invoice.siteName}</div>}
-          {deliveryAddress && <div style={{ fontSize: '12px', color: '#64748b' }}>{deliveryAddress}</div>}
-          {locationStr(deliveryLocation) && <div style={{ fontSize: '12px', color: '#64748b' }}>{locationStr(deliveryLocation)}</div>}
-          {invoice.deliverySameAsBilling && !invoice.siteName && !deliveryAddress && <div style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Same as billing address</div>}
-        </div>
-      </div>
+      {/* Bill To + Ship To — table for reliable two-column rendering in email. */}
+      <table role="presentation" cellPadding={0} cellSpacing={0} style={{ width: '100%', borderCollapse: 'collapse', borderBottom: '1px solid #e2e8f0' }}>
+        <tbody>
+          <tr>
+            <td style={{ padding: '20px 20px 16px 36px', verticalAlign: 'top', width: '50%' }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px' }}>Bill To</div>
+              <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>{invoice.clientName || '—'}</div>
+              {invoice.clientAddress && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{invoice.clientAddress}</div>}
+              {locationStr(invoice.clientLocation) && <div style={{ fontSize: '12px', color: '#64748b' }}>{locationStr(invoice.clientLocation)}</div>}
+              {invoice.clientGst && <div style={{ fontSize: '12px', color: '#64748b' }}>GST: <strong>{invoice.clientGst}</strong></div>}
+              {invoice.clientEmail && <div style={{ fontSize: '12px', color: '#64748b' }}>{invoice.clientEmail}</div>}
+              {invoice.clientPhone && <div style={{ fontSize: '12px', color: '#64748b' }}>{invoice.clientPhone}</div>}
+            </td>
+            <td style={{ padding: '20px 36px 16px 20px', verticalAlign: 'top', width: '50%' }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px' }}>Ship To</div>
+              {invoice.siteName && <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '2px' }}>{invoice.siteName}</div>}
+              {deliveryAddress && <div style={{ fontSize: '12px', color: '#64748b' }}>{deliveryAddress}</div>}
+              {locationStr(deliveryLocation) && <div style={{ fontSize: '12px', color: '#64748b' }}>{locationStr(deliveryLocation)}</div>}
+              {invoice.deliverySameAsBilling && !invoice.siteName && !deliveryAddress && <div style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Same as billing address</div>}
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
       {/* Transport Details — only shown if at least one field is filled */}
       {(invoice.transportName || invoice.vehicleNumber) && (
@@ -265,22 +280,34 @@ export default function InvoicePrintView({ invoice, currencySymbol }: Props) {
         </div>
       )}
 
-      {/* Seal + Signature */}
+      {/* Seal + Signature — table-aligned to the right for email compatibility. */}
       {(invoice.companySeal || invoice.signature) && (
-        <div style={{ padding: '16px 36px 28px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '48px' }}>
-          {invoice.companySeal && (
-            <div style={{ textAlign: 'center' }}>
-              <img src={invoice.companySeal} alt="Company Seal" style={{ width: '80px', height: '80px', objectFit: 'contain' }} />
-              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>Company Seal</div>
-            </div>
-          )}
-          {invoice.signature && (
-            <div style={{ textAlign: 'center' }}>
-              <img src={invoice.signature} alt="Signature" style={{ width: '120px', height: '60px', objectFit: 'contain', borderBottom: '1px solid #cbd5e1' }} />
-              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>Authorised Signature</div>
-            </div>
-          )}
-        </div>
+        <table role="presentation" cellPadding={0} cellSpacing={0} style={{ width: '100%', borderCollapse: 'collapse', borderTop: '1px solid #e2e8f0' }}>
+          <tbody>
+            <tr>
+              <td style={{ padding: '16px 36px 28px' }}>
+                <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', marginLeft: 'auto' }}>
+                  <tbody>
+                    <tr>
+                      {invoice.companySeal && (
+                        <td style={{ textAlign: 'center', padding: '0 24px', verticalAlign: 'top' }}>
+                          <img src={invoice.companySeal} alt="Company Seal" style={{ width: '80px', height: '80px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+                          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>Company Seal</div>
+                        </td>
+                      )}
+                      {invoice.signature && (
+                        <td style={{ textAlign: 'center', padding: '0 24px', verticalAlign: 'top' }}>
+                          <img src={invoice.signature} alt="Signature" style={{ width: '120px', height: '60px', objectFit: 'contain', borderBottom: '1px solid #cbd5e1', display: 'block', margin: '0 auto' }} />
+                          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>Authorised Signature</div>
+                        </td>
+                      )}
+                    </tr>
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       )}
 
       {/* Footer */}

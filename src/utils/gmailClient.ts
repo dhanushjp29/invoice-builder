@@ -103,6 +103,12 @@ export function captureOAuthRedirect(): GmailConnection | null {
   return conn;
 }
 
+export interface MailAttachment {
+  filename: string;
+  mimeType: string;
+  base64: string; // raw base64 (no data: prefix)
+}
+
 /** Send an invoice email via the Netlify function. */
 export async function sendInvoiceEmail(args: {
   to: string;
@@ -110,6 +116,7 @@ export async function sendInvoiceEmail(args: {
   html: string;
   pdfBase64?: string;
   pdfFilename?: string;
+  attachments?: MailAttachment[];
 }): Promise<void> {
   const conn = getConnection();
   if (!conn) throw new Error('Gmail not connected.');

@@ -18,6 +18,12 @@ export const handler: Handler = async (event) => {
     return { statusCode: 500, body: 'Server is missing Google OAuth env vars.' };
   }
 
+  interface AttachmentPayload {
+    filename: string;
+    mimeType: string;
+    base64: string;
+  }
+
   let payload: {
     refreshToken?: string;
     fromEmail?: string;
@@ -26,6 +32,7 @@ export const handler: Handler = async (event) => {
     html?: string;
     pdfBase64?: string;
     pdfFilename?: string;
+    attachments?: AttachmentPayload[];
   };
 
   try {
@@ -34,7 +41,7 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, body: 'Invalid JSON.' };
   }
 
-  const { refreshToken, fromEmail, to, subject, html, pdfBase64, pdfFilename } = payload;
+  const { refreshToken, fromEmail, to, subject, html, pdfBase64, pdfFilename, attachments } = payload;
 
   if (!refreshToken || !fromEmail || !to || !subject || !html) {
     return { statusCode: 400, body: 'Missing required fields.' };
@@ -50,13 +57,28 @@ export const handler: Handler = async (event) => {
 
     const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
 
+    // Merge the invoice PDF into the unified attachments list so the MIME
+    // builder only needs one code path.
+    const allAttachments: AttachmentPayload[] = [];
+    if (pdfBase64) {
+      allAttachments.push({
+        filename: pdfFilename || 'invoice.pdf',
+        mimeType: 'application/pdf',
+        base64: pdfBase64,
+      });
+    }
+    if (Array.isArray(attachments)) {
+      for (const a of attachments) {
+        if (a?.filename && a?.mimeType && a?.base64) allAttachments.push(a);
+      }
+    }
+
     const raw = buildRawMessage({
       from: fromEmail,
       to,
       subject,
       html,
-      pdfBase64,
-      pdfFilename: pdfFilename || 'invoice.pdf',
+      attachments: allAttachments,
     });
 
     const res = await gmail.users.messages.send({
@@ -85,21 +107,33 @@ function buildRawMessage(args: {
   to: string;
   subject: string;
   html: string;
-  pdfBase64?: string;
-  pdfFilename: string;
+  attachments: { filename: string; mimeType: string; base64: string }[];
 }): string {
-  const { from, to, subject, html, pdfBase64, pdfFilename } = args;
+  const { from, to, subject, html, attachments } = args;
   // RFC 2047 encoded-word for non-ASCII subjects
   const encodedSubject = `=?utf-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
 
+  const header = [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: ${encodedSubject}`,
+    'MIME-Version: 1.0',
+  ];
+
   let mime: string;
-  if (pdfBase64) {
-    const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  if (attachments.length === 0) {
     mime = [
-      `From: ${from}`,
-      `To: ${to}`,
-      `Subject: ${encodedSubject}`,
-      'MIME-Version: 1.0',
+      ...header,
+      'Content-Type: text/html; charset="UTF-8"',
+      'Content-Transfer-Encoding: base64',
+      '',
+      Buffer.from(html, 'utf8').toString('base64'),
+      '',
+    ].join('\r\n');
+  } else {
+    const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const parts: string[] = [
+      ...header,
       `Content-Type: multipart/mixed; boundary="${boundary}"`,
       '',
       `--${boundary}`,
@@ -108,28 +142,20 @@ function buildRawMessage(args: {
       '',
       Buffer.from(html, 'utf8').toString('base64'),
       '',
-      `--${boundary}`,
-      `Content-Type: application/pdf; name="${pdfFilename}"`,
-      'Content-Transfer-Encoding: base64',
-      `Content-Disposition: attachment; filename="${pdfFilename}"`,
-      '',
-      pdfBase64.replace(/(.{76})/g, '$1\n'),
-      '',
-      `--${boundary}--`,
-      '',
-    ].join('\r\n');
-  } else {
-    mime = [
-      `From: ${from}`,
-      `To: ${to}`,
-      `Subject: ${encodedSubject}`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset="UTF-8"',
-      'Content-Transfer-Encoding: base64',
-      '',
-      Buffer.from(html, 'utf8').toString('base64'),
-      '',
-    ].join('\r\n');
+    ];
+    for (const a of attachments) {
+      parts.push(
+        `--${boundary}`,
+        `Content-Type: ${a.mimeType}; name="${a.filename}"`,
+        'Content-Transfer-Encoding: base64',
+        `Content-Disposition: attachment; filename="${a.filename}"`,
+        '',
+        a.base64.replace(/(.{76})/g, '$1\n'),
+        '',
+      );
+    }
+    parts.push(`--${boundary}--`, '');
+    mime = parts.join('\r\n');
   }
 
   // Gmail API expects URL-safe base64 (no padding) of the full RFC 2822 message

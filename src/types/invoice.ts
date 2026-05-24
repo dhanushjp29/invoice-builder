@@ -181,5 +181,10 @@ export interface Attachment {
   name: string;
   mimeType: string;
   size: number;
-  data: string; // base64 data URL
+  /** IndexedDB blob id ("path" to the real file). Always set for new uploads. */
+  blobId?: string;
+  /** Legacy inline base64 data URL. Only present on attachments created before
+   *  the IndexedDB migration; new code paths write `blobId` and ignore this. */
+  data?: string;
+  includeInMail?: boolean;
 }

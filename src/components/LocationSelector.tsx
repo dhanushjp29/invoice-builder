@@ -7,8 +7,10 @@ interface Props {
   label: string;
   value: LocationData;
   onChange: (data: LocationData) => void;
-  /** Mark all four location fields (Country/State/City/Pincode) as required */
+  /** Mark Country/State/City as required */
   requiredLocation?: boolean;
+  /** Mark Pincode as required (defaults to true when requiredLocation is true, for backward compat) */
+  requiredPincode?: boolean;
   /** Per-field error highlights */
   countryError?: boolean;
   stateError?: boolean;
@@ -41,9 +43,11 @@ function InputField({ label, value, onChange, placeholder, required = false, err
 export default function LocationSelector({
   label, value, onChange,
   requiredLocation = false,
+  requiredPincode,
   countryError = false, stateError = false, cityError = false, pincodeError = false,
 }: Props) {
   const safe = value ?? BLANK_LOCATION;
+  const pincodeRequired = requiredPincode ?? requiredLocation;
 
   // Build option lists. We attach country/state hints via a "value" encoding for cross-search.
   // value scheme: "ISO" for country; "COUNTRY|STATE" for state; "COUNTRY|STATE|CITY" for city.
@@ -138,7 +142,7 @@ export default function LocationSelector({
           value={safe.pincode}
           onChange={(pincode) => onChange({ ...safe, pincode })}
           placeholder="Enter Pincode"
-          required={requiredLocation}
+          required={pincodeRequired}
           error={pincodeError}
         />
       </div>
