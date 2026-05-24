@@ -73,6 +73,15 @@ export interface AdditionalCharge {
   amount: number;
 }
 
+/** Bank account details rendered on the invoice as payment instructions. */
+export interface AccountDetails {
+  accountHolderName: string;
+  bankName: string;
+  accountNumber: string;
+  ifscCode: string;
+  branchName?: string; // optional
+}
+
 export interface LocationData {
   country: string;
   state: string;
@@ -130,6 +139,10 @@ export interface InvoiceDocument {
   companyLocation: LocationData;
   companySeal: string | null;
   signature: string | null;
+
+  // Bank / account details (for payment instructions on the invoice).
+  // Branch is the only optional field. Older saves may lack this object.
+  accountDetails?: AccountDetails;
 
   // Client / Buyer
   clientName: string;

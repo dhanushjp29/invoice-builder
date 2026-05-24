@@ -7,10 +7,22 @@
   command = "npm run dev:vite"
   port = 8888
   targetPort = 5173
-  publish = "dist"
-  # Don't auto-open a tab. Vite's auto-open is also disabled (see vite.config.ts).
-  # The user opens http://localhost:8888 manually — guarantees a single tab.
+  # framework = "#custom" tells netlify-dev: "I'm running my own dev server,
+  # don't auto-apply SPA rewrites." Without this, netlify-dev rewrites any
+  # unknown route to /index.html and forwards the HTML back to Vite's
+  # import-analysis pipeline, which crashes trying to parse HTML as JS.
+  framework = "#custom"
   autoLaunch = false
 
 [functions]
   node_bundler = "esbuild"
+
+# SPA fallback for production deploys. `force = false` (default) means it only
+# triggers when no static file matches — so Vite-built assets like /assets/*
+# and /seed/* are served as files, only unknown routes fall back to the SPA.
+# Netlify-dev still parses this block, but framework = "#custom" above tells
+# netlify-dev to skip redirect application in dev mode.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

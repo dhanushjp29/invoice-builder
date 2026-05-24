@@ -272,6 +272,53 @@ export default function InvoicePrintView({ invoice, currencySymbol }: Props) {
         </div>
       )}
 
+      {/* Bank / Account Details — only shown when the required fields are present */}
+      {invoice.accountDetails
+        && invoice.accountDetails.accountHolderName
+        && invoice.accountDetails.bankName
+        && invoice.accountDetails.accountNumber
+        && invoice.accountDetails.ifscCode && (
+        <div style={{ padding: '0 36px 16px' }}>
+          <table role="presentation" cellPadding={0} cellSpacing={0} style={{ width: '100%', borderCollapse: 'collapse', background: '#f8fafc', border: '1px solid #e2e8f0', borderLeft: '3px solid #2563eb', borderRadius: '6px' }}>
+            <tbody>
+              <tr>
+                <td style={{ padding: '12px 16px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' }}>
+                    Bank Account Details
+                  </div>
+                  <table role="presentation" cellPadding={0} cellSpacing={0} style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', color: '#334155' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ padding: '2px 0', width: '38%', color: '#64748b' }}>Account Holder</td>
+                        <td style={{ padding: '2px 0', fontWeight: 600 }}>{invoice.accountDetails.accountHolderName}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '2px 0', color: '#64748b' }}>Bank</td>
+                        <td style={{ padding: '2px 0', fontWeight: 600 }}>{invoice.accountDetails.bankName}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '2px 0', color: '#64748b' }}>Account Number</td>
+                        <td style={{ padding: '2px 0', fontWeight: 600, fontFamily: 'monospace', letterSpacing: '0.04em' }}>{invoice.accountDetails.accountNumber}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '2px 0', color: '#64748b' }}>IFSC Code</td>
+                        <td style={{ padding: '2px 0', fontWeight: 600, fontFamily: 'monospace', letterSpacing: '0.04em' }}>{invoice.accountDetails.ifscCode}</td>
+                      </tr>
+                      {invoice.accountDetails.branchName && (
+                        <tr>
+                          <td style={{ padding: '2px 0', color: '#64748b' }}>Branch</td>
+                          <td style={{ padding: '2px 0', fontWeight: 600 }}>{invoice.accountDetails.branchName}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Terms & Conditions */}
       {invoice.termsAndConditions && (
         <div style={{ padding: '0 36px 24px', borderTop: '1px solid #e2e8f0', marginTop: '8px', paddingTop: '16px' }}>

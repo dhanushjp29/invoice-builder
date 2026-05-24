@@ -57,7 +57,7 @@ export default function InvoiceSidebar({ invoices, activeId, onSelect, onNew }: 
   }
 
   return (
-    <aside className="w-52 shrink-0 hidden lg:block">
+    <aside data-tour="sidebar-list" className="w-52 shrink-0 hidden lg:block">
       <div
         className="sticky top-[4.5rem] flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm"
         style={{ maxHeight: 'calc(100vh - 5.5rem)' }}

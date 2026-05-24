@@ -47,7 +47,7 @@ export default function InvoiceHeader({ invoice, errors, onChange }: Props) {
   const currencyInfo = CURRENCY_OPTIONS.find((c) => c.code === invoice.currency) ?? CURRENCY_OPTIONS[0];
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-5 ring-1 ring-slate-100 space-y-6">
+    <div data-tour="company-info" className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-5 ring-1 ring-slate-100 space-y-6">
       {/* Top row: Logo + Company Info on the left, INVOICE badge on the right */}
       <div className="flex flex-col sm:flex-row gap-5">
         <LogoUpload

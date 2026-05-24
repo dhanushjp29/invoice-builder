@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import type { InvoiceDocument, LocationData } from '../types/invoice';
 import LocationSelector from './LocationSelector';
 
@@ -36,18 +37,51 @@ function InputField({ label, value, onChange, type = 'text', placeholder = '', r
 export default function ClientInfo({ invoice, errors, onChange }: Props) {
   const hasErr = (key: string) => !!errors?.has(key);
 
+  // Stash the user-typed delivery details when they tick "Same as billing" so
+  // un-ticking restores their work instead of leaving it blank.
+  const stash = useRef<{ address: string; location: LocationData; siteName: string } | null>(null);
+
   const handleSameAsBilling = (checked: boolean) => {
-    onChange('deliverySameAsBilling', checked);
     if (checked) {
+      // Only stash on the OFF→ON transition (i.e. when there's actual data to keep).
+      // Skip when the existing delivery fields are already empty.
+      if (
+        invoice.deliveryAddress.trim() ||
+        invoice.deliveryLocation?.country?.trim() ||
+        invoice.deliveryLocation?.state?.trim() ||
+        invoice.deliveryLocation?.city?.trim() ||
+        invoice.deliveryLocation?.pincode?.trim() ||
+        invoice.siteName.trim()
+      ) {
+        stash.current = {
+          address: invoice.deliveryAddress,
+          location: invoice.deliveryLocation,
+          siteName: invoice.siteName,
+        };
+      }
+      onChange('deliverySameAsBilling', true);
       onChange('deliveryAddress', invoice.clientAddress);
       onChange('deliveryLocation', invoice.clientLocation);
+    } else {
+      // ON→OFF: restore the previously-stashed delivery details, if any.
+      onChange('deliverySameAsBilling', false);
+      if (stash.current) {
+        onChange('deliveryAddress', stash.current.address);
+        onChange('deliveryLocation', stash.current.location);
+        onChange('siteName', stash.current.siteName);
+        stash.current = null;
+      } else {
+        // No stash → clear so user starts fresh instead of seeing the billing copy.
+        onChange('deliveryAddress', '');
+        onChange('deliveryLocation', { country: '', state: '', city: '', pincode: '' });
+      }
     }
   };
 
   return (
     <div className="space-y-5 mb-5">
       {/* Bill To */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 ring-1 ring-slate-100">
+      <div data-tour="client-info" className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 ring-1 ring-slate-100">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-1 h-5 bg-blue-500 rounded-full" />
           <h2 className="text-sm font-bold text-blue-700 uppercase tracking-widest">Bill To (Buyer)</h2>

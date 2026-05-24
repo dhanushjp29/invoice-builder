@@ -187,6 +187,15 @@ export function createBlankInvoice(): Omit<InvoiceDocument, '_id' | 'createdAt' 
     companyLocation: last?.companyLocation ?? blankLocation(),
     companySeal: last?.companySeal ?? null,
     signature: last?.signature ?? null,
+    // Carry account details over from the last invoice — these rarely change
+    // per invoice and saving the user from re-typing them every time.
+    accountDetails: last?.accountDetails ?? {
+      accountHolderName: '',
+      bankName: '',
+      accountNumber: '',
+      ifscCode: '',
+      branchName: '',
+    },
 
     clientName: '',
     clientAddress: '',

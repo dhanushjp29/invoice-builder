@@ -180,7 +180,7 @@ export default function InvoiceTotals({
   };
 
   return (
-    <div className="space-y-5 mb-5">
+    <div data-tour="totals" className="space-y-5 mb-5">
       {/* Notes + Totals row */}
       <div className="flex flex-col md:flex-row gap-5">
         {/* Notes */}

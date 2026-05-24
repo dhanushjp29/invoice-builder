@@ -4,8 +4,10 @@ import { Toaster } from 'react-hot-toast';
 import InvoiceBuilder from './components/InvoiceBuilder';
 import MailPreview from './components/MailPreview';
 import SplashScreen from './components/SplashScreen';
+import OnboardingTour from './components/OnboardingTour';
 import { captureOAuthRedirect } from './utils/gmailClient';
 import { migrateLegacyAttachments } from './db/migrateAttachments';
+import { autoSeed } from './db/autoSeed';
 import { LottiePreloader } from './components/LottieLoader';
 import { preloadLottieAssets } from './components/lottieAssets';
 
@@ -20,8 +22,7 @@ export default function App() {
     // Move any legacy inline-base64 attachments into IndexedDB. One-shot,
     // guarded by a localStorage flag — safe to call on every mount.
     void migrateLegacyAttachments();
-    // Warm the HTTP cache for every Lottie file so the loader overlay paints
-    // instantly the first time the user triggers a long operation.
+    void autoSeed();
     preloadLottieAssets();
   }, []);
 
@@ -67,6 +68,10 @@ export default function App() {
         <Route path="/invoice/:id/mail" element={<MailPreview />} />
         <Route path="/*" element={<InvoiceBuilder />} />
       </Routes>
+
+      {/* First-login product tour. Self-gates on localStorage; only renders on
+          the list route. Waits for the splash to finish to avoid overlap. */}
+      {!showSplash && <OnboardingTour />}
 
       {/* Off-screen Lottie warm-up. Pays the WASM compile + animation parse
           cost once at boot so every LottieLoader overlay opens instantly. */}

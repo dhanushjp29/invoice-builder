@@ -12,13 +12,14 @@ export default function PreviewBar({ exportingPdf, printing, onMail, onPrint, on
   const busy = exportingPdf || printing;
 
   return (
-    <div className="bg-blue-50 border-b border-blue-100 px-6 py-3 flex items-center justify-between gap-2 flex-wrap print:hidden">
+    <div data-tour="preview-bar" className="bg-blue-50 border-b border-blue-100 px-6 py-3 flex items-center justify-between gap-2 flex-wrap print:hidden">
       <span className="text-sm font-semibold text-blue-700">Invoice Preview</span>
       <div className="flex items-center gap-2">
 
         <button
           onClick={onMail}
           disabled={busy}
+          data-tour="mail-btn"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition disabled:opacity-60"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

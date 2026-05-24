@@ -6,6 +6,7 @@ import type { AdditionalCharge, InvoiceDocument, LineItem, PaymentMethod } from 
 import { CURRENCY_OPTIONS } from '../types/invoice';
 import { recalculate } from '../utils/recalculate';
 import { downloadPdf, printAsPdf } from '../utils/pdfExport';
+import AccountDetails from './AccountDetails';
 import AdditionalCharges from './AdditionalCharges';
 import ClientInfo from './ClientInfo';
 import FileAttachments from './FileAttachments';
@@ -47,6 +48,23 @@ export default function InvoiceBuilder() {
   });
 
   const [allInvoices, setAllInvoices] = useState<InvoiceDocument[]>(() => findAll());
+
+  // autoSeed runs asynchronously on app boot — if the list mounts before it
+  // finishes writing, the user sees an empty list. autoSeed fires
+  // 'invoiceDB:seeded' when done; reload the snapshot then.
+  useEffect(() => {
+    const onSeeded = () => {
+      setAllInvoices(findAll());
+      // If the currently-loaded invoice was created by the seeder, refresh it.
+      const idFromUrl = parseIdFromPath(window.location.pathname);
+      if (idFromUrl && idFromUrl !== 'new') {
+        const found = findOne(idFromUrl);
+        if (found) setInvoiceRaw(recalculate(found));
+      }
+    };
+    window.addEventListener('invoiceDB:seeded', onSeeded);
+    return () => window.removeEventListener('invoiceDB:seeded', onSeeded);
+  }, []);
   // isDirty: true whenever the user has modified the current invoice since last save/load
   const [isDirty, setIsDirty] = useState(false);
   // When navigation is blocked by unsaved changes, store the target invoice id here
@@ -98,6 +116,15 @@ export default function InvoiceBuilder() {
       case 'invoiceDate': return ['invoiceDate'];
       case 'paymentMethod': return ['paymentMethod'];
       case 'termsAndConditions': return ['termsAndConditions'];
+      case 'accountDetails': {
+        const ad = value as { accountHolderName?: string; bankName?: string; accountNumber?: string; ifscCode?: string } | undefined;
+        const out: string[] = [];
+        if (ad?.accountHolderName?.trim()) out.push('accountHolderName');
+        if (ad?.bankName?.trim())          out.push('bankName');
+        if (ad?.accountNumber?.trim())     out.push('accountNumber');
+        if (ad?.ifscCode?.trim())          out.push('ifscCode');
+        return out;
+      }
       default: return [];
     }
   }
@@ -336,6 +363,13 @@ export default function InvoiceBuilder() {
     if (!invoice.paymentMethod.trim()) { found.add('paymentMethod'); missingLabels.push('Payment Method'); }
     if (!invoice.termsAndConditions.trim()) { found.add('termsAndConditions'); missingLabels.push('Terms & Conditions'); }
 
+    // Account Details — branchName is the only optional field.
+    const ad = invoice.accountDetails;
+    if (!ad?.accountHolderName?.trim()) { found.add('accountHolderName'); missingLabels.push('Account Holder Name'); }
+    if (!ad?.bankName?.trim())          { found.add('bankName');          missingLabels.push('Bank Name'); }
+    if (!ad?.accountNumber?.trim())     { found.add('accountNumber');     missingLabels.push('Account Number'); }
+    if (!ad?.ifscCode?.trim())          { found.add('ifscCode');          missingLabels.push('IFSC Code'); }
+
     // Line-item sanity: every item needs description, qty > 0, rate > 0, UOM. Tax is OPTIONAL.
     const badItems: number[] = [];
     invoice.lineItems.forEach((it, idx) => {
@@ -477,7 +511,7 @@ export default function InvoiceBuilder() {
       {/* Top Nav */}
       <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3" data-tour="brand">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -505,6 +539,7 @@ export default function InvoiceBuilder() {
             {isListMode && (
               <button
                 onClick={handleNew}
+                data-tour="new-invoice"
                 className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition shadow-sm"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -516,6 +551,7 @@ export default function InvoiceBuilder() {
             {!isListMode && (<>
             <button
               onClick={handlePreviewToggle}
+              data-tour="preview-btn"
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold text-emerald-700 bg-linear-to-b from-emerald-200/70 to-emerald-300/60 hover:from-emerald-300/80 hover:to-emerald-400/70 border border-emerald-300/70 backdrop-blur-sm shadow-sm shadow-emerald-500/20 ring-1 ring-white/40 transition"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -528,6 +564,7 @@ export default function InvoiceBuilder() {
             <button
               onClick={handleSave}
               disabled={saving}
+              data-tour="save-btn"
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-60 shadow-sm"
             >
               {saving ? (
@@ -586,6 +623,11 @@ export default function InvoiceBuilder() {
                     invoice={invoice}
                     errors={errors}
                     onChange={(field, value) => updateField(field, value as never)}
+                  />
+                  <AccountDetails
+                    value={invoice.accountDetails}
+                    errors={errors}
+                    onChange={(next) => updateField('accountDetails' as never, next as never)}
                   />
                   <ClientInfo
                     invoice={invoice}

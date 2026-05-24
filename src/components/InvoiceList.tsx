@@ -639,7 +639,7 @@ function AllInvoicesView({ invoices, onSelect, onDelete, onExport }: AllProps) {
         <h2 className="text-sm font-bold text-blue-700 uppercase tracking-widest">All Invoices</h2>
         <span className="text-xs font-semibold text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5">{invoices.length}</span>
         <div className="ml-auto flex items-center gap-2 flex-wrap">
-          <div className="relative">
+          <div className="relative" data-tour="search">
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
               className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition w-44" />
             <svg className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -647,6 +647,7 @@ function AllInvoicesView({ invoices, onSelect, onDelete, onExport }: AllProps) {
             </svg>
           </div>
           <button onClick={() => void onExport('all', () => exportAllXlsx(sorted))} disabled={sorted.length === 0}
+            data-tour="export-xlsx"
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition shadow-sm disabled:opacity-40">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             Export XLSX
@@ -655,6 +656,7 @@ function AllInvoicesView({ invoices, onSelect, onDelete, onExport }: AllProps) {
       </div>
 
       {/* Date filter */}
+      <div data-tour="date-filter">
       <DateFilterStrip fromDate={fromDate} toDate={toDate} onFrom={setFromDate} onTo={setToDate}
         onApply={applyDate} onClear={clearDate} applied={!!(appliedFrom || appliedTo)}
         total={invoices.length} filtered={sorted.length}
@@ -664,10 +666,11 @@ function AllInvoicesView({ invoices, onSelect, onDelete, onExport }: AllProps) {
           </button>
         ) : undefined}
       />
+      </div>
 
       {/* Empty */}
       {sorted.length === 0 ? (
-        <div className="py-16 flex flex-col items-center text-center">
+        <div className="py-16 flex flex-col items-center text-center" data-tour="invoice-table">
           <div className="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center mb-3">
             <svg className="w-7 h-7 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
           </div>
@@ -676,7 +679,7 @@ function AllInvoicesView({ invoices, onSelect, onDelete, onExport }: AllProps) {
         </div>
       ) : (
         <>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" data-tour="invoice-table">
             <table className="w-full">
               <thead>
                 <tr className="bg-blue-50/50 border-b border-blue-100">
@@ -709,6 +712,7 @@ function AllInvoicesView({ invoices, onSelect, onDelete, onExport }: AllProps) {
                   const isConf = confirmId === inv._id;
                   return (
                     <tr key={inv._id} onClick={() => onSelect(inv._id)}
+                      data-tour-row={inv.invoiceNumber}
                       className="border-b border-slate-100 hover:bg-blue-50/30 transition cursor-pointer group">
                       <td className="px-4 py-3.5 text-sm font-semibold text-blue-700">{inv.invoiceNumber || '—'}</td>
                       <td className="px-4 py-3.5 text-sm text-gray-800">{inv.clientName || <span className="text-slate-400 italic">No client</span>}</td>
@@ -1292,7 +1296,7 @@ export default function InvoiceList({ invoices, onSelect, onDelete }: Props) {
   return (
     <div className="flex gap-5 items-start">
       {/* ── Sidebar nav ── */}
-      <aside className="w-48 shrink-0 sticky top-[4.5rem]">
+      <aside className="w-48 shrink-0 sticky top-[4.5rem]" data-tour="views-nav">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-blue-100 bg-blue-50">
             <span className="text-[11px] font-bold text-blue-700 uppercase tracking-widest">Invoice Views</span>

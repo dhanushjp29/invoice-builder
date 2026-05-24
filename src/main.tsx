@@ -1,6 +1,4 @@
 import { StrictMode } from 'react'
-import { seedTestData } from './db/seed'
-if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).seedTestData = seedTestData;
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'

@@ -141,7 +141,7 @@ export default function MailPreview() {
 
 
       {/* Action bar */}
-      <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
+      <div data-tour="mail-header" className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
           <div>
             <p className="text-sm font-bold text-slate-800">Send Invoice via Gmail</p>
@@ -188,7 +188,7 @@ export default function MailPreview() {
 
       <div className="max-w-4xl mx-auto py-6 px-4 flex flex-col gap-4">
         {/* Compose fields */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col gap-3">
+        <div data-tour="mail-compose" className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col gap-3">
           <div className="flex items-center gap-3">
             <label className="text-xs font-bold text-slate-500 w-16 uppercase tracking-wider">From</label>
             <div className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-700 flex items-center justify-between">

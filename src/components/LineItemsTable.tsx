@@ -67,7 +67,7 @@ export default function LineItemsTable({ items, currencySymbol, isExport, onAdd,
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 mb-5 overflow-hidden ring-1 ring-slate-100">
+    <div data-tour="line-items" className="bg-white rounded-2xl shadow-sm border border-slate-200 mb-5 overflow-hidden ring-1 ring-slate-100">
       <div className="px-6 py-4 border-b border-blue-100 bg-blue-50 flex items-center gap-2">
         <div className="w-1 h-5 bg-blue-500 rounded-full" />
         <h2 className="text-sm font-bold text-blue-700 uppercase tracking-widest">Line Items</h2>
