@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import toast from 'react-hot-toast';
+import { notify } from '../utils/notify';
 import type { PaymentMethod } from '../types/invoice';
 import { PAYMENT_METHOD_OPTIONS } from '../types/invoice';
 
@@ -123,7 +123,7 @@ export default function InvoiceTotals({
       PAYMENT_METHOD_OPTIONS.some((m) => m.toLowerCase() === titleLower) ||
       customMethods.some((m) => m.toLowerCase() === titleLower);
     if (alreadyExists) {
-      toast.error(`"${titled}" already exists.`);
+      notify.error(`"${titled}" already exists.`);
       setAdding(false);
       setDraftMethod('');
       return;

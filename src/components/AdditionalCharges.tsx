@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import toast from 'react-hot-toast';
+import { notify } from '../utils/notify';
 import type { AdditionalCharge, AdditionalChargeType } from '../types/invoice';
 import { ADDITIONAL_CHARGE_TYPES } from '../types/invoice';
 import { createAdditionalCharge } from '../db/invoiceDB';
@@ -31,6 +31,9 @@ function toTitleCase(s: string): string {
 export default function AdditionalCharges({ charges, currency, onChange }: Props) {
   // newType holds either a preset key OR a free-text custom label
   const [newType, setNewType] = useState<string>('Freight Charges');
+  // Amount typed alongside newType — string so the input can stay blank.
+  // Parsed to a number on Add.
+  const [newAmount, setNewAmount] = useState<string>('');
 
   // Session-only custom labels the user has created. Cleared on page reload
   // (we deliberately don't persist these to localStorage).
@@ -53,20 +56,30 @@ export default function AdditionalCharges({ charges, currency, onChange }: Props
     return [...preset, ...custom];
   }, [customLabels]);
 
-  // Add a new row. If the label already exists, the row is still created so the
-  // user can enter their new amount — duplicate detection then shows inline
-  // "Sum into existing / Delete this row" buttons next to the duplicate.
+  // Add a new row. Validates: type must be non-empty and amount must parse to
+  // a positive number. Duplicates are allowed through — the per-row duplicate
+  // detector then surfaces inline "Sum into existing / Delete this row"
+  // buttons next to the new row so the user can decide what to do.
   const addCharge = () => {
     const trimmed = newType.trim();
-    if (!trimmed) return;
-    if (isPresetType(trimmed)) {
-      onChange([...charges, createAdditionalCharge({ type: trimmed, label: trimmed })]);
-    } else {
-      const titled = toTitleCase(trimmed);
-      rememberCustom(titled);
-      onChange([...charges, createAdditionalCharge({ type: 'Other', label: titled })]);
-      setNewType(titled);
+    if (!trimmed) {
+      notify.error('Select or enter a charge type.');
+      return;
     }
+    const parsed = parseFloat(newAmount);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      notify.error('Enter an amount greater than 0.');
+      return;
+    }
+    const finalLabel = isPresetType(trimmed) ? trimmed : toTitleCase(trimmed);
+    if (isPresetType(finalLabel)) {
+      onChange([...charges, createAdditionalCharge({ type: finalLabel, label: finalLabel, amount: parsed })]);
+    } else {
+      rememberCustom(finalLabel);
+      onChange([...charges, createAdditionalCharge({ type: 'Other', label: finalLabel, amount: parsed })]);
+      setNewType(finalLabel);
+    }
+    setNewAmount('');
   };
 
   // Resolve a duplicate row by summing its amount into the existing matching row,
@@ -80,7 +93,7 @@ export default function AdditionalCharges({ charges, currency, onChange }: Props
       .map((c) => c._id === target._id ? { ...c, amount: (c.amount || 0) + (current.amount || 0) } : c)
       .filter((c) => c._id !== currentId);
     onChange(next);
-    toast.success(`Merged into existing "${target.label}".`);
+    notify.success(`Merged into existing "${target.label}".`);
   };
 
   const updateCharge = (id: string, field: keyof Omit<AdditionalCharge, '_id'>, value: string | number) => {
@@ -117,9 +130,14 @@ export default function AdditionalCharges({ charges, currency, onChange }: Props
       <div className="p-6 space-y-3">
         {charges.length > 0 && (
           <div className="space-y-2">
-            {charges.map((charge) => {
+            {charges.map((charge, idx) => {
               const rowValue = charge.type === 'Other' ? (charge.label || '') : charge.type;
-              const dup = findDuplicate(charges, charge.label, charge._id);
+              // Show the duplicate warning only on the LATER row (the one the user
+              // just added) — the earlier row is the "original" they will keep.
+              const key = charge.label.trim().toLowerCase();
+              const dup = key
+                ? charges.find((c, i) => i < idx && c.label.trim().toLowerCase() === key)
+                : undefined;
               return (
                 <div key={charge._id} className={`p-3 rounded-xl bg-slate-50 border ${dup ? 'border-red-200 ring-1 ring-red-200' : 'border-slate-100'}`}>
                   <div className="flex items-center gap-3">
@@ -196,6 +214,23 @@ export default function AdditionalCharges({ charges, currency, onChange }: Props
               onChange={(v) => setNewType(v)}
               placeholder="Select or type a custom name…"
               creatable
+            />
+          </div>
+
+          <div className="flex flex-col gap-1 w-40">
+            <label className="text-xs font-semibold text-blue-600 uppercase tracking-wide">
+              Amount ({currency}) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              value={newAmount}
+              onChange={(e) => setNewAmount(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCharge(); } }}
+              placeholder="0.00"
+              className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 transition text-right"
             />
           </div>
 

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import toast, { Toaster } from 'react-hot-toast';
+import { notify } from '../utils/notify';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getAttachmentBlob } from '../db/attachmentStore';
-import { findOne } from '../db/invoiceDB';
+import { findOne, updateOne } from '../db/invoiceDB';
 import type { InvoiceDocument } from '../types/invoice';
 import { CURRENCY_OPTIONS } from '../types/invoice';
 import { openAttachmentInNewTab } from '../utils/attachmentView';
@@ -11,6 +11,7 @@ import { blobToBase64 } from '../utils/pdfBase64';
 import { generatePdfBlob } from '../utils/pdfExport';
 import { recalculate } from '../utils/recalculate';
 import InvoicePrintView from './InvoicePrintView';
+import LottieLoader from './LottieLoader';
 
 export default function MailPreview() {
   const { id } = useParams<{ id: string }>();
@@ -78,24 +79,18 @@ export default function MailPreview() {
   }
 
   async function handleSend() {
-    if (!conn) { toast.error('Connect Gmail first.'); return; }
-    if (!to.trim()) { toast.error('Recipient email is required.'); return; }
+    if (!conn) { notify.error('Connect Gmail first.'); return; }
+    if (!to.trim()) { notify.error('Recipient email is required.'); return; }
 
     console.log('[Mail] Send started', { from: conn.email, to: to.trim(), subject });
     setSending(true);
-    try {
+
+    const sendOp = (async () => {
       const html = buildHtmlBody();
-      console.log('[Mail] HTML built, length:', html.length);
-
       const pdfBlob = await generatePdfBlob(`${invoice!.invoiceNumber || 'invoice'}.pdf`);
-      console.log('[Mail] PDF generated, size:', pdfBlob.size, 'bytes');
-
       const pdfBase64 = await blobToBase64(pdfBlob);
-      console.log('[Mail] PDF base64 ready, length:', pdfBase64.length);
-
       const mailAttachments = await collectMailAttachments(invoice!);
       console.log('[Mail] extra attachments:', mailAttachments.map((a) => a.filename));
-
       await sendInvoiceEmail({
         to: to.trim(),
         subject: subject.trim(),
@@ -104,13 +99,26 @@ export default function MailPreview() {
         pdfFilename: `${invoice!.invoiceNumber || 'invoice'}.pdf`,
         attachments: mailAttachments,
       });
+    })();
 
-      console.log('[Mail] Sent OK');
-      toast.success('Email sent!');
+    try {
+      await notify.promise(sendOp, {
+        loading: 'Sending email…',
+        success: `Email sent to ${to.trim()}.`,
+        error: 'Send failed.',
+      });
+      // Mark the invoice as 'mail-sent' and bump the cycle counter. The badge
+      // shows "Mail Sent" for cycle 1 and "Mail Sent (N)" for cycle ≥ 2.
+      // Read fresh from storage so we don't clobber edits made elsewhere.
+      const current = findOne(invoice!._id);
+      if (current) {
+        const nextCycle = (current.cycleCount ?? 0) + 1;
+        updateOne(current._id, { status: 'mail-sent', cycleCount: nextCycle });
+      }
       setTimeout(() => navigate(`/invoice/${invoice!._id}/preview`), 800);
     } catch (err) {
       console.error('[Mail] Send failed:', err);
-      toast.error(err instanceof Error ? err.message : 'Send failed.');
+      // notify.promise already showed the error toast.
     } finally {
       setSending(false);
     }
@@ -119,12 +127,18 @@ export default function MailPreview() {
   function handleDisconnect() {
     disconnect();
     setConn(null);
-    toast.success('Gmail disconnected.');
+    notify.success('Gmail disconnected.');
   }
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <Toaster position="top-right" toastOptions={{ duration: 2500 }} />
+      {/* Toaster is mounted globally in App.tsx */}
+
+      {/* Fullscreen Lottie overlay — only shown while the email is being sent.
+          PDF generation + Gmail API call usually takes a few seconds, long
+          enough that a toast alone feels under-acknowledged. */}
+      <LottieLoader open={sending} variant="email" />
+
 
       {/* Action bar */}
       <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">

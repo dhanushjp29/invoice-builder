@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@lottiefiles/dotlottie-react": "^0.19.4",
     "@tailwindcss/vite": "^4.3.0",
     "country-state-city": "^3.2.1",
     "exceljs": "^4.4.0",

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate as useRouterNavigate, useLocation } from 'react-router-dom';
-import toast, { Toaster } from 'react-hot-toast';
+import { notify } from '../utils/notify';
 import { createBlankInvoice, createLineItem, deleteOne, findAll, findOne, generateInvoiceNumber, insertOne, updateOne } from '../db/invoiceDB';
 import type { AdditionalCharge, InvoiceDocument, LineItem, PaymentMethod } from '../types/invoice';
 import { CURRENCY_OPTIONS } from '../types/invoice';
@@ -28,7 +28,7 @@ export default function InvoiceBuilder() {
   const isListMode = location.pathname === '/';
   const isPreviewMode = /\/preview$/.test(location.pathname);
 
-  const [invoice, setInvoice] = useState<InvoiceDocument>(() => {
+  const [invoice, setInvoiceRaw] = useState<InvoiceDocument>(() => {
     // Read the id from the *current* URL each time we mount. We used to read
     // a module-level snapshot, which meant returning here from /mail still
     // showed whatever was open at app start instead of the requested invoice.
@@ -114,6 +114,23 @@ export default function InvoiceBuilder() {
 
   const currencyInfo = CURRENCY_OPTIONS.find((c) => c.code === invoice.currency) ?? CURRENCY_OPTIONS[0];
 
+  /**
+   * Wrapped state setter for edits. If the invoice's previous status was
+   * 'mail-sent', flip it to 'modified' so the badge updates the moment the
+   * user touches a field. Loaders (handleSelectInvoice, handleNew) call
+   * setInvoiceRaw directly to skip this transition.
+   */
+  const setInvoice = useCallback((updater: (prev: InvoiceDocument) => InvoiceDocument) => {
+    setInvoiceRaw((prev) => {
+      const next = updater(prev);
+      if (prev.status === 'mail-sent' && next === prev) return next;
+      if (prev.status === 'mail-sent') {
+        return { ...next, status: 'modified' };
+      }
+      return next;
+    });
+  }, []);
+
   // Generic top-level field updater. Also clears any validation error for that field.
   const updateField = useCallback(
     <K extends keyof InvoiceDocument>(field: K, value: InvoiceDocument[K]) => {
@@ -154,21 +171,24 @@ export default function InvoiceBuilder() {
 
   // Resolve a duplicate-description row: sum its quantity into the OTHER row that
   // shares the same description (case-insensitive), then delete the current row.
+  // The toast must live OUTSIDE the setInvoice updater because React's Strict
+  // Mode runs updaters twice in dev for purity checks — a notify.success()
+  // inside the updater would fire the toast twice.
   const handleMergeDuplicateItem = useCallback((id: string) => {
+    const current = invoice.lineItems.find((i) => i._id === id);
+    if (!current) return;
+    const key = current.description.trim().toLowerCase();
+    if (!key) return;
+    const target = invoice.lineItems.find((i) => i._id !== id && i.description.trim().toLowerCase() === key);
+    if (!target) return;
     setInvoice((prev) => {
-      const current = prev.lineItems.find((i) => i._id === id);
-      if (!current) return prev;
-      const key = current.description.trim().toLowerCase();
-      if (!key) return prev;
-      const target = prev.lineItems.find((i) => i._id !== id && i.description.trim().toLowerCase() === key);
-      if (!target) return prev;
       const nextItems = prev.lineItems
         .map((i) => i._id === target._id ? { ...i, quantity: (i.quantity || 0) + (current.quantity || 0) } : i)
         .filter((i) => i._id !== id);
-      toast.success(`Merged into existing "${target.description}".`);
       return recalculate({ ...prev, lineItems: nextItems });
     });
-  }, []);
+    notify.success(`Merged into existing "${target.description}".`);
+  }, [invoice.lineItems]);
 
   // Additional charges
   const handleChargesChange = useCallback((charges: AdditionalCharge[]) => {
@@ -180,10 +200,11 @@ export default function InvoiceBuilder() {
     setInvoice((prev) => recalculate({ ...prev, roundOff }));
   }, []);
 
-  // List-view navigation
+  // List-view navigation. Loaders use setInvoiceRaw so the status-flip
+  // wrapper doesn't mistake the load for an edit.
   const handleNew = () => {
     const blank = createBlankInvoice();
-    setInvoice(recalculate({ ...blank, _id: '', createdAt: '', updatedAt: '' }));
+    setInvoiceRaw(recalculate({ ...blank, _id: '', createdAt: '', updatedAt: '' }));
     setErrors(new Set());
     setIsDirty(false);
     routerNavigate('/invoice/new');
@@ -195,11 +216,11 @@ export default function InvoiceBuilder() {
     const loaded = found.status === 'draft'
       ? { ...found, invoiceNumber: generateInvoiceNumber() }
       : found;
-    setInvoice(recalculate(loaded));
+    setInvoiceRaw(recalculate(loaded));
     setErrors(new Set());
     setIsDirty(false);
-    // Stay in preview mode if currently previewing, but only for saved invoices
-    const stayPreview = isPreviewMode && found.status === 'saved';
+    // Stay in preview mode if currently previewing, but only for saved/mail-sent/modified invoices
+    const stayPreview = isPreviewMode && found.status !== 'draft';
     routerNavigate(stayPreview ? `/invoice/${id}/preview` : `/invoice/${id}`);
   };
 
@@ -243,7 +264,7 @@ export default function InvoiceBuilder() {
       : insertOne(draftDoc);
     if (saved) {
       setAllInvoices(findAll());
-      toast.success('Saved as draft.');
+      notify.success('Saved as draft.');
     }
     const target = pendingNavId!;
     setPendingNavId(null);
@@ -258,10 +279,10 @@ export default function InvoiceBuilder() {
     const saved = docToSave._id
       ? updateOne(docToSave._id, docToSave)
       : insertOne(docToSave);
-    if (!saved) { toast.error('Save failed.'); return; }
+    if (!saved) { notify.error('Save failed.'); return; }
     setAllInvoices(findAll());
     setIsDirty(false);
-    toast.success('Invoice saved!');
+    notify.success('Invoice saved!');
     const target = pendingNavId!;
     setPendingNavId(null);
     doNav(target);
@@ -329,7 +350,7 @@ export default function InvoiceBuilder() {
     if (missingLabels.length === 0) return true;
     const preview = missingLabels.slice(0, 4).join(', ');
     const more = missingLabels.length > 4 ? ` +${missingLabels.length - 4} more` : '';
-    toast.error(`Please fill required fields: ${preview}${more}`);
+    notify.error(`Please fill required fields: ${preview}${more}`);
     return false;
   };
 
@@ -345,15 +366,15 @@ export default function InvoiceBuilder() {
         saved = insertOne(invoice);
       }
       if (saved) {
-        setInvoice(saved);
+        setInvoiceRaw(saved);
         setAllInvoices(findAll());
         setIsDirty(false);
-        toast.success('Invoice saved!');
+        notify.success('Invoice saved!');
       } else {
-        toast.error('Save failed. Try again.');
+        notify.error('Save failed. Try again.');
       }
     } catch {
-      toast.error('Save failed. Try again.');
+      notify.error('Save failed. Try again.');
     } finally {
       setSaving(false);
     }
@@ -364,11 +385,13 @@ export default function InvoiceBuilder() {
   const handleExportPDF = async () => {
     setExportingPdf(true);
     try {
-      await downloadPdf(pdfFilename);
-      toast.success('PDF exported successfully!');
+      await notify.promise(downloadPdf(pdfFilename), {
+        loading: 'Generating PDF…',
+        success: 'PDF exported successfully!',
+        error: 'PDF export failed.',
+      });
     } catch (err) {
       console.error('PDF export failed:', err);
-      toast.error('PDF export failed.');
     } finally {
       setExportingPdf(false);
     }
@@ -380,7 +403,7 @@ export default function InvoiceBuilder() {
       await printAsPdf(pdfFilename);
     } catch (err) {
       console.error('Print failed:', err);
-      toast.error('Could not generate PDF. Please try again.');
+      notify.error('Could not generate PDF. Please try again.');
     } finally {
       setPrinting(false);
     }
@@ -391,17 +414,17 @@ export default function InvoiceBuilder() {
   // persist them first so MailPreview reads the fresh state from storage.
   const handleMail = () => {
     if (!invoice._id) {
-      toast.error('Save the invoice before sending.');
+      notify.error('Save the invoice before sending.');
       return;
     }
     if (!invoice.clientEmail.trim()) {
-      toast.error('Add a client email before sending.');
+      notify.error('Add a client email before sending.');
       return;
     }
     if (isDirty) {
       const saved = updateOne(invoice._id, invoice);
-      if (!saved) { toast.error('Could not save changes before opening mail.'); return; }
-      setInvoice(saved);
+      if (!saved) { notify.error('Could not save changes before opening mail.'); return; }
+      setInvoiceRaw(saved);
       setAllInvoices(findAll());
       setIsDirty(false);
     }
@@ -413,10 +436,10 @@ export default function InvoiceBuilder() {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
         e.preventDefault();
-        if (invoice.status === 'saved' && invoice._id) {
+        if (invoice.status !== 'draft' && invoice._id) {
           handlePrint();
         } else {
-          toast.error('Save the invoice before printing.');
+          notify.error('Save the invoice before printing.');
         }
       }
     }
@@ -449,16 +472,7 @@ export default function InvoiceBuilder() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* react-hot-toast — top-right, RTL word direction */}
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 2500,
-          style: { direction: 'rtl', fontFamily: 'inherit' },
-          success: { style: { background: '#22c55e', color: '#fff' } },
-          error: { style: { background: '#ef4444', color: '#fff' } },
-        }}
-      />
+      {/* Toaster is mounted once globally in App.tsx — see notify util. */}
 
       {/* Top Nav */}
       <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
@@ -638,7 +652,7 @@ export default function InvoiceBuilder() {
 
       {pendingNavId !== null && (
         <NavGuardModal
-          invoiceCase={!invoice._id ? 'new' : invoice.status === 'draft' ? 'draft' : 'saved'}
+          invoiceCase={!invoice._id ? 'new' : invoice.status === 'draft' ? 'draft' : 'saved' /* mail-sent + modified treated as 'saved' for the modal */}
           onSaveAsDraft={handleSaveAsDraft}
           onSave={handleSaveAndNavigate}
           onDontSave={handleDiscardAndNavigate}

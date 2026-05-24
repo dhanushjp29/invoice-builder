@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { InvoiceDocument } from '../types/invoice';
+import { statusColors, statusLabel } from '../utils/invoiceStatus';
 
 const PER_PAGE = 15;
 
@@ -151,7 +152,7 @@ export default function InvoiceSidebar({ invoices, activeId, onSelect, onNew }: 
           <div className="overflow-y-auto flex-1">
             {paginated.map((inv) => {
               const isActive = !!activeId && inv._id === activeId;
-              const isDraft = inv.status === 'draft';
+              const colors = statusColors(inv.status);
               return (
                 <button
                   key={inv._id}
@@ -165,15 +166,10 @@ export default function InvoiceSidebar({ invoices, activeId, onSelect, onNew }: 
                     <span className={`text-xs font-bold truncate leading-snug ${isActive ? 'text-blue-700' : 'text-gray-800'}`}>
                       {inv.invoiceNumber || '—'}
                     </span>
-                    {isDraft ? (
-                      <span className="inline-flex items-center gap-0.5 shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700">
-                        <span className="w-1 h-1 rounded-full bg-amber-400" />Draft
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-0.5 shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-50 text-green-700">
-                        <span className="w-1 h-1 rounded-full bg-green-500" />Created
-                      </span>
-                    )}
+                    <span className={`inline-flex items-center gap-0.5 shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap ${colors.bg} ${colors.text}`}>
+                      <span className={`w-1 h-1 rounded-full ${colors.dot}`} />
+                      {statusLabel(inv)}
+                    </span>
                   </div>
                   <p className="text-[10px] text-slate-400 leading-none mb-1">{fmtDate(inv.invoiceDate)}</p>
                   {inv.projectName && (

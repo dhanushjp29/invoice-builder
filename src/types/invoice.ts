@@ -167,7 +167,12 @@ export interface InvoiceDocument {
   notes: string;
   termsAndConditions: string;
   paymentMethod: PaymentMethod | '';
-  status: 'draft' | 'saved';
+  status: 'draft' | 'saved' | 'mail-sent' | 'modified';
+  /** How many send/edit cycles this invoice has been through. 1 after the
+   *  first successful mail send; bumped before each subsequent send. Used to
+   *  render "Mail Sent (N)" / "Modified (N)" badges when N ≥ 2. Unused while
+   *  the invoice is still 'draft' or 'saved'. */
+  cycleCount?: number;
 
   // File attachments (stored as base64 data URLs; not shown in print/preview)
   attachments: Attachment[];

@@ -1,12 +1,16 @@
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
+import { usePersistentState } from '../hooks/usePersistentState';
 import type { InvoiceDocument } from '../types/invoice';
 import { CURRENCY_OPTIONS } from '../types/invoice';
+import { statusColors, statusLabel } from '../utils/invoiceStatus';
+import { notify } from '../utils/notify';
 import DatePicker from './DatePicker';
 import InvoicePrintView from './InvoicePrintView';
+import LottieLoader from './LottieLoader';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PAGE_SIZES = [10, 15, 25, 50];
@@ -278,7 +282,7 @@ async function exportAllXlsx(invoices: InvoiceDocument[]) {
       client: inv.clientName, cGst: inv.clientGst, cEmail: inv.clientEmail,
       company: inv.companyName, coGst: inv.companyGst,
       project: inv.projectName ?? '', po: inv.poNumber ?? '', eway: inv.eWayBillNumber ?? '',
-      curr: inv.currency, status: inv.status === 'draft' ? 'Draft' : 'Created',
+      curr: inv.currency, status: statusLabel(inv),
       sub: n(inv.subtotal), disc: n(inv.discountAmount), discSub: n(inv.discountedSubtotal),
       cgst: n(inv.totalCGST), sgst: n(inv.totalSGST), igst: n(inv.totalIGST), tax: n(inv.taxAmount),
       addCh: n(inv.additionalChargesTotal), rnd: n(inv.roundOff), grand: n(inv.grandTotal),
@@ -287,7 +291,13 @@ async function exportAllXlsx(invoices: InvoiceDocument[]) {
     });
     xlDataRow(row, i % 2 === 1, numCols);
     const sc = row.getCell('status');
-    sc.font = { bold: true, color: { argb: inv.status === 'draft' ? 'FFB45309' : 'FF15803D' } };
+    // Colour by status: draft=amber, mail-sent=blue, modified=orange, saved=green.
+    const statusArgb =
+      inv.status === 'draft'     ? 'FFB45309'
+      : inv.status === 'mail-sent' ? 'FF1D4ED8'
+      : inv.status === 'modified'  ? 'FFC2410C'
+      : 'FF15803D';
+    sc.font = { bold: true, color: { argb: statusArgb } };
   });
 
   const buf = await wb.xlsx.writeBuffer();
@@ -474,7 +484,14 @@ function DateFilterStrip({ fromDate, toDate, onFrom, onTo, onApply, onClear, app
     <div className="px-5 py-3 border-b border-slate-100 bg-blue-50/30 flex items-end gap-3 flex-wrap">
       <DatePicker label="From Date" value={fromDate} onChange={onFrom} placeholder="From date…" />
       <DatePicker label="To Date" value={toDate} onChange={onTo} placeholder="To date…" />
-      <button onClick={onApply} className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition shadow-sm">Show</button>
+      <button
+        onClick={onApply}
+        disabled={!fromDate.trim() || !toDate.trim()}
+        title={!fromDate.trim() || !toDate.trim() ? 'Pick both From Date and To Date' : 'Apply date filter'}
+        className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+      >
+        Show
+      </button>
       {applied && <button onClick={onClear} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 transition">Clear</button>}
       {extraClear}
       <span className="ml-auto text-xs text-blue-600 font-semibold">
@@ -487,7 +504,8 @@ function DateFilterStrip({ fromDate, toDate, onFrom, onTo, onApply, onClear, app
 // ═══════════════════════════════════════════════════════════════════════════════
 // ALL INVOICES VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
-interface AllProps { invoices: InvoiceDocument[]; onSelect: (id: string) => void; onDelete: (id: string) => void; }
+type ExportRunner = (kind: 'all' | 'detailed', work: () => Promise<void>) => Promise<void>;
+interface AllProps { invoices: InvoiceDocument[]; onSelect: (id: string) => void; onDelete: (id: string) => void; onExport: ExportRunner; }
 type AllSortField = 'invoiceNumber' | 'clientName' | 'companyName' | 'invoiceDate' | 'dueDate' | 'status' | 'grandTotal';
 
 function allDispVal(inv: InvoiceDocument, key: string): string {
@@ -497,23 +515,26 @@ function allDispVal(inv: InvoiceDocument, key: string): string {
     case 'companyName': return inv.companyName || '(Blank)';
     case 'invoiceDate': return fmtDate(inv.invoiceDate);
     case 'dueDate': return fmtDate(inv.dueDate ?? '');
-    case 'status': return inv.status === 'draft' ? 'Draft' : 'Created';
+    case 'status': return statusLabel(inv);
     default: return '';
   }
 }
 
-function AllInvoicesView({ invoices, onSelect, onDelete }: AllProps) {
-  const [search, setSearch] = useState('');
-  const [fromDate, setFromDate] = useState(todayISO);
-  const [toDate, setToDate] = useState(todayISO);
-  const [appliedFrom, setAppliedFrom] = useState('');
-  const [appliedTo, setAppliedTo] = useState('');
-  const [colFilters, setColFilters] = useState<Record<string, string[]>>({});
+function AllInvoicesView({ invoices, onSelect, onDelete, onExport }: AllProps) {
+  // Persisted across navigation — see usePersistentState. Ephemeral UI state
+  // (popover, confirm dialog, in-flight download) stays as plain useState so
+  // it doesn't reopen when the user returns.
+  const [search, setSearch] = usePersistentState('invoiceList.all.search', '');
+  const [fromDate, setFromDate] = usePersistentState('invoiceList.all.fromDate', todayISO);
+  const [toDate, setToDate] = usePersistentState('invoiceList.all.toDate', todayISO);
+  const [appliedFrom, setAppliedFrom] = usePersistentState('invoiceList.all.appliedFrom', '');
+  const [appliedTo, setAppliedTo] = usePersistentState('invoiceList.all.appliedTo', '');
+  const [colFilters, setColFilters] = usePersistentState<Record<string, string[]>>('invoiceList.all.colFilters', {});
   const [filterMenu, setFilterMenu] = useState<{ key: string; pos: { top: number; left: number } } | null>(null);
-  const [sortField, setSortField] = useState<AllSortField | 'updatedAt'>('updatedAt');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(15);
+  const [sortField, setSortField] = usePersistentState<AllSortField | 'updatedAt'>('invoiceList.all.sortField', 'updatedAt');
+  const [sortDir, setSortDir] = usePersistentState<SortDir>('invoiceList.all.sortDir', 'desc');
+  const [page, setPage] = usePersistentState('invoiceList.all.page', 1);
+  const [pageSize, setPageSize] = usePersistentState('invoiceList.all.pageSize', 15);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [dlId, setDlId] = useState<string | null>(null);
 
@@ -579,7 +600,7 @@ function AllInvoicesView({ invoices, onSelect, onDelete }: AllProps) {
       let va: string | number, vb: string | number;
       switch (sortField) {
         case 'grandTotal': va = n(a.grandTotal); vb = n(b.grandTotal); break;
-        case 'status': va = a.status === 'draft' ? 'draft' : 'created'; vb = b.status === 'draft' ? 'draft' : 'created'; break;
+        case 'status': va = statusLabel(a); vb = statusLabel(b); break;
         case 'updatedAt': va = a.updatedAt || ''; vb = b.updatedAt || ''; break;
         default: va = (a[sortField as keyof InvoiceDocument] as string) || ''; vb = (b[sortField as keyof InvoiceDocument] as string) || '';
       }
@@ -625,7 +646,7 @@ function AllInvoicesView({ invoices, onSelect, onDelete }: AllProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
             </svg>
           </div>
-          <button onClick={() => exportAllXlsx(sorted)} disabled={sorted.length === 0}
+          <button onClick={() => void onExport('all', () => exportAllXlsx(sorted))} disabled={sorted.length === 0}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition shadow-sm disabled:opacity-40">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             Export XLSX
@@ -695,9 +716,15 @@ function AllInvoicesView({ invoices, onSelect, onDelete }: AllProps) {
                       <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">{fmtDate(inv.invoiceDate)}</td>
                       <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">{fmtDate(inv.dueDate)}</td>
                       <td className="px-4 py-3.5">
-                        {inv.status === 'draft'
-                          ? <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Draft</span>
-                          : <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-200"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />Created</span>}
+                        {(() => {
+                          const c = statusColors(inv.status);
+                          return (
+                            <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap border ${c.bg} ${c.text} ${c.border}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                              {statusLabel(inv)}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3.5 text-sm font-bold text-gray-900 text-right whitespace-nowrap">{s}{n(inv.grandTotal).toFixed(2)}</td>
                       <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
@@ -984,19 +1011,20 @@ const DET_COLS: DetColDef[] = [
   },
 ];
 
-function DetailedInvoiceView({ invoices }: { invoices: InvoiceDocument[] }) {
-  const created = useMemo(() => invoices.filter(inv => inv.status === 'saved'), [invoices]);
-  const [search, setSearch] = useState('');
-  const [fromDate, setFromDate] = useState(todayISO);
-  const [toDate, setToDate] = useState(todayISO);
-  const [appliedFrom, setAppliedFrom] = useState('');
-  const [appliedTo, setAppliedTo] = useState('');
-  const [colFilters, setColFilters] = useState<Record<string, string[]>>({});
+function DetailedInvoiceView({ invoices, onExport }: { invoices: InvoiceDocument[]; onExport: ExportRunner }) {
+  const created = useMemo(() => invoices.filter(inv => inv.status !== 'draft'), [invoices]);
+  // Persisted across navigation. Popover state stays ephemeral.
+  const [search, setSearch] = usePersistentState('invoiceList.detailed.search', '');
+  const [fromDate, setFromDate] = usePersistentState('invoiceList.detailed.fromDate', todayISO);
+  const [toDate, setToDate] = usePersistentState('invoiceList.detailed.toDate', todayISO);
+  const [appliedFrom, setAppliedFrom] = usePersistentState('invoiceList.detailed.appliedFrom', '');
+  const [appliedTo, setAppliedTo] = usePersistentState('invoiceList.detailed.appliedTo', '');
+  const [colFilters, setColFilters] = usePersistentState<Record<string, string[]>>('invoiceList.detailed.colFilters', {});
   const [filterMenu, setFilterMenu] = useState<{ key: string; pos: { top: number; left: number } } | null>(null);
-  const [sortField, setSortField] = useState<string>('Date');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [sortField, setSortField] = usePersistentState<string>('invoiceList.detailed.sortField', 'Date');
+  const [sortDir, setSortDir] = usePersistentState<SortDir>('invoiceList.detailed.sortDir', 'desc');
+  const [page, setPage] = usePersistentState('invoiceList.detailed.page', 1);
+  const [pageSize, setPageSize] = usePersistentState('invoiceList.detailed.pageSize', 10);
 
   const hasColFilter = Object.keys(colFilters).length > 0;
   const applyDate = () => { setAppliedFrom(fromDate); setAppliedTo(toDate); };
@@ -1090,7 +1118,7 @@ function DetailedInvoiceView({ invoices }: { invoices: InvoiceDocument[] }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
             </svg>
           </div>
-          <button onClick={() => exportDetailedXlsx(sorted)} disabled={sorted.length === 0}
+          <button onClick={() => void onExport('detailed', () => exportDetailedXlsx(sorted))} disabled={sorted.length === 0}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-violet-600 text-white hover:bg-violet-700 transition shadow-sm disabled:opacity-40">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             Export XLSX
@@ -1222,7 +1250,33 @@ interface Props { invoices: InvoiceDocument[]; onSelect: (id: string) => void; o
 type View = 'all' | 'detailed';
 
 export default function InvoiceList({ invoices, onSelect, onDelete }: Props) {
-  const [view, setView] = useState<View>('all');
+  // Persisted so coming back from /invoice/:id lands on the same All/Detailed tab.
+  const [view, setView] = usePersistentState<View>('invoiceList.view', 'all');
+  // Centralised export loading state — both child views call `runExport` so the
+  // Lottie overlay + toast are managed in one place. Workbook generation
+  // (string building + buffer encode) blocks the main thread, so showing the
+  // overlay gives the user feedback that the click registered.
+  const [exporting, setExporting] = useState<null | 'all' | 'detailed'>(null);
+  const runExport = useCallback(async (kind: 'all' | 'detailed', work: () => Promise<void>) => {
+    setExporting(kind);
+    const startedAt = performance.now();
+    // Minimum overlay display time. Small exports finish in <100ms which makes
+    // the loader flash and feel broken — hold it for at least this long so the
+    // animation actually registers as feedback.
+    const MIN_VISIBLE_MS = 1000;
+    try {
+      await notify.promise(work(), {
+        loading: 'Generating Excel file…',
+        success: 'Excel file downloaded.',
+        error: 'Excel export failed.',
+      });
+    } finally {
+      const elapsed = performance.now() - startedAt;
+      const remaining = MIN_VISIBLE_MS - elapsed;
+      if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
+      setExporting(null);
+    }
+  }, []);
 
   const navItems: { id: View; label: string; icon: React.ReactNode; count: number; theme: string }[] = [
     {
@@ -1230,7 +1284,7 @@ export default function InvoiceList({ invoices, onSelect, onDelete }: Props) {
       icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
     },
     {
-      id: 'detailed', label: 'Detailed Invoice', count: invoices.filter(i => i.status === 'saved').length, theme: 'violet',
+      id: 'detailed', label: 'Detailed Invoice', count: invoices.filter(i => i.status !== 'draft').length, theme: 'violet',
       icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
     },
   ];
@@ -1271,9 +1325,11 @@ export default function InvoiceList({ invoices, onSelect, onDelete }: Props) {
       {/* ── Content ── */}
       <div className="flex-1 min-w-0">
         {view === 'all'
-          ? <AllInvoicesView invoices={invoices} onSelect={onSelect} onDelete={onDelete} />
-          : <DetailedInvoiceView invoices={invoices} />}
+          ? <AllInvoicesView invoices={invoices} onSelect={onSelect} onDelete={onDelete} onExport={runExport} />
+          : <DetailedInvoiceView invoices={invoices} onExport={runExport} />}
       </div>
+
+      <LottieLoader open={exporting !== null} variant="common" />
     </div>
   );
 }

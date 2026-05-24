@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import toast from 'react-hot-toast';
+import { notify } from '../utils/notify';
 import type { LineItem } from '../types/invoice';
 import { UOM_OPTIONS, TAX_RATES } from '../types/invoice';
 import Combobox from './Combobox';
@@ -58,7 +58,7 @@ export default function LineItemsTable({ items, currencySymbol, isExport, onAdd,
     if (!trimmed) return;
     if (!(UOM_OPTIONS as readonly string[]).includes(trimmed)) {
       if (customUoms.some((u) => u.toLowerCase() === trimmed.toLowerCase())) {
-        toast.error(`"${trimmed}" is already in UOM list.`);
+        notify.error(`"${trimmed}" is already in UOM list.`);
         return;
       }
       setCustomUoms((prev) => [...prev, trimmed]);
@@ -109,8 +109,14 @@ export default function LineItemsTable({ items, currencySymbol, isExport, onAdd,
 
                   <td className="px-2 py-2">
                     {(() => {
-                      const isDupDesc = !!item.description.trim() &&
-                        items.some((o) => o._id !== item._id && o.description.trim().toLowerCase() === item.description.trim().toLowerCase());
+                      // Flag the duplicate on the LATER row only — the earlier row
+                      // is the "original" the user will keep. `idx` is the row's
+                      // position; we only mark it when there's an earlier row with
+                      // the same description.
+                      const desc = item.description.trim().toLowerCase();
+                      const isDupDesc = !!desc && items.some((o, i) =>
+                        i < idx && o.description.trim().toLowerCase() === desc
+                      );
                       return (
                         <div className="relative">
                           <Combobox

@@ -8,7 +8,9 @@
   port = 8888
   targetPort = 5173
   publish = "dist"
-  autoLaunch = true
+  # Don't auto-open a tab. Vite's auto-open is also disabled (see vite.config.ts).
+  # The user opens http://localhost:8888 manually — guarantees a single tab.
+  autoLaunch = false
 
 [functions]
   node_bundler = "esbuild"

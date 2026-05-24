@@ -3,6 +3,7 @@ import type { Attachment } from '../types/invoice';
 import { createAttachment } from '../db/invoiceDB';
 import { deleteAttachment, getAttachmentBlob, putAttachment } from '../db/attachmentStore';
 import { openAttachmentInNewTab } from '../utils/attachmentView';
+import { notify } from '../utils/notify';
 
 interface Props {
   attachments: Attachment[];
@@ -135,26 +136,41 @@ export default function FileAttachments({ attachments, onChange }: Props) {
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
-    // Persist each File to IndexedDB first, then build the metadata record
-    // that goes into the invoice JSON. The Blob bytes never touch React state.
-    const added = await Promise.all(
-      Array.from(files).map(async (file) => {
+
+    // One toast per file with its own Tailwind progress bar. Each upload runs
+    // independently so a slow file doesn't block the others.
+    const uploads = Array.from(files).map((file) => {
+      const work = (async () => {
         const blobId = await putAttachment(file);
         return createAttachment(file, blobId);
-      }),
-    );
-    onChange([...attachments, ...added]);
+      })();
+      notify.upload(file.name, work);
+      return work;
+    });
+
+    const results = await Promise.allSettled(uploads);
+    const added = results
+      .filter((r): r is PromiseFulfilledResult<Awaited<typeof uploads[number]>> => r.status === 'fulfilled')
+      .map((r) => r.value);
+
+    if (added.length > 0) {
+      onChange([...attachments, ...added]);
+    }
+    const failed = results.length - added.length;
+    if (failed > 0) {
+      console.error('[Attachments] %d upload(s) failed', failed);
+    }
   }
 
   async function handleView(att: Attachment) {
     const blob = await resolveBlob(att);
-    if (!blob) return;
+    if (!blob) { notify.error('Attachment file is missing.'); return; }
     openAttachmentInNewTab(blob, att.name);
   }
 
   async function handleDownload(att: Attachment) {
     const blob = await resolveBlob(att);
-    if (!blob) return;
+    if (!blob) { notify.error('Attachment file is missing.'); return; }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -169,6 +185,7 @@ export default function FileAttachments({ attachments, onChange }: Props) {
     const target = attachments.find((a) => a._id === id);
     if (target?.blobId) deleteAttachment(target.blobId).catch(() => { /* best effort */ });
     onChange(attachments.filter((a) => a._id !== id));
+    if (target) notify.success(`Removed "${target.name}".`);
   }
 
   function handleToggleIncludeInMail(id: string, checked: boolean) {

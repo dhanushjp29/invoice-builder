@@ -4,6 +4,8 @@
  * The actual access-token exchange happens server-side in /send-email.
  */
 
+import { notify } from './notify';
+
 const KEY_REFRESH = 'gmail_refresh_token';
 const KEY_EMAIL = 'gmail_connected_email';
 
@@ -69,6 +71,7 @@ export function startGmailConnect(): void {
   const params = new URLSearchParams({ returnTo });
   const url = `${functionsBaseUrl()}/.netlify/functions/google-auth?${params.toString()}`;
   console.log('[Gmail OAuth] Redirecting to:', url);
+  notify.info('Redirecting to Google…');
   window.location.href = url;
 }
 
@@ -96,6 +99,7 @@ export function captureOAuthRedirect(): GmailConnection | null {
   const conn = { refreshToken, email };
   saveConnection(conn);
   console.log('[Gmail OAuth] Saved connection for', email);
+  notify.success(`Gmail connected as ${email}.`);
 
   // Strip the hash so a refresh doesn't reprocess it
   history.replaceState(null, '', window.location.pathname + window.location.search);
