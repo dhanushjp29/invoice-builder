@@ -12,9 +12,9 @@ export default function PreviewBar({ exportingPdf, printing, onMail, onPrint, on
   const busy = exportingPdf || printing;
 
   return (
-    <div data-tour="preview-bar" className="bg-blue-50 border-b border-blue-100 px-6 py-3 flex items-center justify-between gap-2 flex-wrap print:hidden">
-      <span className="text-sm font-semibold text-blue-700">Invoice Preview</span>
-      <div className="flex items-center gap-2">
+    <div data-tour="preview-bar" className="bg-blue-50 border-b border-blue-100 px-4 sm:px-6 py-3 flex items-center justify-between gap-2 flex-wrap print:hidden">
+      <span className="hidden sm:inline text-sm font-semibold text-blue-700">Invoice Preview</span>
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap w-full sm:w-auto">
 
         <button
           onClick={onMail}

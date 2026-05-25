@@ -560,37 +560,38 @@ export default function InvoiceBuilder() {
 
       {/* Top Nav */}
       <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3" data-tour="brand">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0" data-tour="brand">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm shrink-0">
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
-            <div>
-              <h1 className="text-slate-800 font-bold text-base leading-none">Invoice Builder</h1>
+            <div className="hidden sm:block min-w-0">
+              <h1 className="text-slate-800 font-bold text-base leading-none truncate">Invoice Builder</h1>
               <p className="text-slate-400 text-xs mt-0.5">Professional Invoicing</p>
             </div>
             {!isListMode && (
               <button
                 onClick={handleBackToList}
-                className="flex items-center gap-1 ml-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
+                className="flex items-center gap-1 sm:ml-2 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition shrink-0"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-                All Invoices
+                <span className="hidden sm:inline">All Invoices</span>
+                <span className="sm:hidden">Back</span>
               </button>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {isListMode && (
               <button
                 onClick={handleNew}
                 data-tour="new-invoice"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition shadow-sm"
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition shadow-sm"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -635,7 +636,7 @@ export default function InvoiceBuilder() {
         </div>
       </header>
 
-      <main className={`mx-auto px-4 sm:px-6 py-6 ${isListMode ? 'max-w-370' : 'max-w-7xl'}`}>
+      <main className={`mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 ${isListMode ? 'max-w-370' : 'max-w-7xl'}`}>
         {isListMode ? (
           <InvoiceList
             invoices={allInvoices}
@@ -643,7 +644,7 @@ export default function InvoiceBuilder() {
             onDelete={handleDeleteInvoice}
           />
         ) : (
-          <div className="flex gap-4 items-start">
+          <div className="flex flex-col lg:flex-row lg:gap-4 lg:items-start">
 
             <InvoiceSidebar
               invoices={allInvoices}
@@ -653,7 +654,7 @@ export default function InvoiceBuilder() {
             />
 
             {/* ── Right panel: editor or preview ── */}
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 w-full">
               {isPreviewMode ? (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                   <PreviewBar
@@ -665,7 +666,14 @@ export default function InvoiceBuilder() {
                     onExportPDF={handleExportPDF}
                     onBackToEditor={() => routerNavigate(`/invoice/${invoice._id || 'new'}`)}
                   />
-                  <InvoicePrintView invoice={invoice} currencySymbol={currencyInfo.symbol} />
+                  <div className="overflow-x-auto">
+                    <div className="min-w-180">
+                      <InvoicePrintView invoice={invoice} currencySymbol={currencyInfo.symbol} />
+                    </div>
+                  </div>
+                  <p className="sm:hidden text-[11px] text-slate-400 text-center py-2 border-t border-slate-100 bg-slate-50">
+                    ← swipe to see the full invoice →
+                  </p>
                 </div>
               ) : (
                 <>

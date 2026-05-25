@@ -20,8 +20,8 @@ export default function PrivacyPolicy() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-10">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 sm:p-12 space-y-8">
+      <main className="max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-10">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 sm:p-8 md:p-12 space-y-8">
           <div>
             <h2 className="text-3xl font-bold text-slate-900">Privacy Policy</h2>
             <p className="mt-2 text-sm text-slate-500">Last updated: May 2025</p>

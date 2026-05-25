@@ -59,7 +59,7 @@ export default function UploadToast({ t, fileName, work }: Props) {
 
   return (
     <div
-      className={`${t.visible ? 'animate-enter' : 'animate-leave'} w-80 bg-white rounded-xl border border-slate-200 shadow-[0_6px_20px_rgba(15,23,42,0.08)] px-4 py-3`}
+      className={`${t.visible ? 'animate-enter' : 'animate-leave'} w-80 max-w-[calc(100vw-32px)] bg-white rounded-xl border border-slate-200 shadow-[0_6px_20px_rgba(15,23,42,0.08)] px-4 py-3`}
     >
       <div className="flex items-center gap-2 mb-2">
         {state === 'success' ? (

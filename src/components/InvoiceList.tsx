@@ -491,7 +491,7 @@ function Pagination({ total, page, pageSize, onPage, onPageSize, label = 'Rows',
   const border = theme === 'violet' ? 'border-violet-100 bg-violet-50/30' : 'border-slate-100 bg-slate-50/60';
 
   return (
-    <div className={`flex items-center justify-between px-5 py-3 border-t ${border}`}>
+    <div className={`flex items-center justify-between flex-wrap gap-2 px-4 sm:px-5 py-3 border-t ${border}`}>
       <div className="flex items-center gap-2">
         <span className="text-xs text-slate-500">{label} per page</span>
         <DropdownSelect value={pageSize} onChange={v => { onPageSize(v); onPage(1); }} options={PAGE_SIZES} />
@@ -512,7 +512,7 @@ function Pagination({ total, page, pageSize, onPage, onPageSize, label = 'Rows',
 interface DateStripProps { fromDate: string; toDate: string; onFrom: (v: string) => void; onTo: (v: string) => void; onApply: () => void; onClear: () => void; applied: boolean; extraClear?: React.ReactNode; total: number; filtered: number; }
 function DateFilterStrip({ fromDate, toDate, onFrom, onTo, onApply, onClear, applied, extraClear, total, filtered }: DateStripProps) {
   return (
-    <div className="px-5 py-3 border-b border-slate-100 bg-blue-50/30 flex items-end gap-3 flex-wrap">
+    <div className="px-4 sm:px-5 py-3 border-b border-slate-100 bg-blue-50/30 flex items-end gap-2 sm:gap-3 flex-wrap">
       <DatePicker label="From Date" value={fromDate} onChange={onFrom} placeholder="From date…" />
       <DatePicker label="To Date" value={toDate} onChange={onTo} placeholder="To date…" />
       <button
@@ -676,14 +676,14 @@ function AllInvoicesView({ invoices, onSelect, onDelete, onExport, onOverlay }: 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-blue-100 bg-blue-50 flex items-center gap-3 flex-wrap">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-blue-100 bg-blue-50 flex items-center gap-2 sm:gap-3 flex-wrap">
         <div className="w-1 h-5 bg-blue-500 rounded-full" />
         <h2 className="text-sm font-bold text-blue-700 uppercase tracking-widest">All Invoices</h2>
         <span className="text-xs font-semibold text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5">{invoices.length}</span>
         <div className="ml-auto flex items-center gap-2 flex-wrap">
           <div className="relative" data-tour="search">
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
-              className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition w-44" />
+              className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition w-32 sm:w-44" />
             <svg className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
             </svg>
@@ -722,7 +722,7 @@ function AllInvoicesView({ invoices, onSelect, onDelete, onExport, onOverlay }: 
       ) : (
         <>
           <div className="overflow-x-auto" data-tour="invoice-table">
-            <table className="w-full">
+            <table className="w-full min-w-[820px]">
               <thead>
                 <tr className="bg-blue-50/50 border-b border-blue-100">
                   {COLS.map(([field, label, cls, filterable]) => (
@@ -1172,14 +1172,14 @@ function DetailedInvoiceView({ invoices, onExport }: { invoices: InvoiceDocument
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-violet-200 overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-violet-100 bg-violet-50 flex items-center gap-3 flex-wrap">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-violet-100 bg-violet-50 flex items-center gap-2 sm:gap-3 flex-wrap">
         <div className="w-1 h-5 bg-violet-500 rounded-full" />
         <h2 className="text-sm font-bold text-violet-700 uppercase tracking-widest">Detailed Invoice</h2>
         <span className="text-xs font-semibold text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5">{created.length} invoices</span>
         <div className="ml-auto flex items-center gap-2 flex-wrap">
           <div className="relative">
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
-              className="pl-8 pr-3 py-1.5 rounded-lg border border-violet-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 transition w-44" />
+              className="pl-8 pr-3 py-1.5 rounded-lg border border-violet-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 transition w-32 sm:w-44" />
             <svg className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
             </svg>
@@ -1388,14 +1388,14 @@ export default function InvoiceList({ invoices, onSelect, onDelete }: Props) {
   ];
 
   return (
-    <div className="flex gap-5 items-start">
-      {/* ── Sidebar nav ── */}
-      <aside className="w-48 shrink-0 sticky top-18" data-tour="views-nav">
+    <div className="flex flex-col md:flex-row gap-3 md:gap-5 items-stretch md:items-start">
+      {/* ── Sidebar nav — full-width pill bar on mobile, vertical sidebar on tablet+ ── */}
+      <aside className="w-full md:w-48 md:shrink-0 md:sticky md:top-18" data-tour="views-nav">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-blue-100 bg-blue-50">
+          <div className="hidden md:block px-4 py-3 border-b border-blue-100 bg-blue-50">
             <span className="text-[11px] font-bold text-blue-700 uppercase tracking-widest">Invoice Views</span>
           </div>
-          <nav className="p-2 space-y-1">
+          <nav className="p-2 flex flex-row md:flex-col gap-1 md:gap-1 md:space-y-1">
             {navItems.map(({ id, label, icon, count, theme }) => {
               const active = view === id;
               const styles = {
@@ -1409,7 +1409,7 @@ export default function InvoiceList({ invoices, onSelect, onDelete }: Props) {
               const countStyle = active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500';
               return (
                 <button key={id} onClick={() => setView(id)}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition ${styles}`}>
+                  className={`flex-1 md:flex-none w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition ${styles}`}>
                   {icon}
                   <span className="flex-1 text-left leading-tight text-[12px]">{label}</span>
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${countStyle}`}>{count}</span>
@@ -1421,7 +1421,7 @@ export default function InvoiceList({ invoices, onSelect, onDelete }: Props) {
       </aside>
 
       {/* ── Content ── */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 w-full">
         {view === 'all'
           ? <AllInvoicesView invoices={invoices} onSelect={onSelect} onDelete={onDelete} onExport={runExport} onOverlay={runOverlay} />
           : <DetailedInvoiceView invoices={invoices} onExport={runExport} />}

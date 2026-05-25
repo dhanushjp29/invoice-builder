@@ -184,7 +184,7 @@ export default function InvoiceTotals({
       {/* Notes + Totals row */}
       <div className="flex flex-col md:flex-row gap-5">
         {/* Notes */}
-        <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 ring-1 ring-slate-100">
+        <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 ring-1 ring-slate-100">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-1 h-5 bg-blue-500 rounded-full" />
             <h2 className="text-sm font-bold text-blue-700 uppercase tracking-widest">Notes</h2>
@@ -199,7 +199,7 @@ export default function InvoiceTotals({
         </div>
 
         {/* Totals Summary */}
-        <div className="w-full md:w-96 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between ring-1 ring-slate-100">
+        <div className="w-full md:w-96 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 flex flex-col justify-between ring-1 ring-slate-100">
           <div className="flex items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-2">
               <div className="w-1 h-5 bg-blue-500 rounded-full" />
@@ -367,7 +367,7 @@ export default function InvoiceTotals({
       </div>
 
       {/* Payment Method */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 ring-1 ring-slate-100">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 ring-1 ring-slate-100">
         <div className="flex items-center gap-2 mb-4">
           <div className={`w-1 h-5 rounded-full ${hasErr('paymentMethod') ? 'bg-red-500' : 'bg-blue-500'}`} />
           <h2 className={`text-sm font-bold uppercase tracking-widest ${hasErr('paymentMethod') ? 'text-red-600' : 'text-blue-700'}`}>
@@ -476,7 +476,7 @@ export default function InvoiceTotals({
       </div>
 
       {/* Terms & Conditions */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 ring-1 ring-slate-100">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 ring-1 ring-slate-100">
         <div className="flex items-center gap-2 mb-3">
           <div className={`w-1 h-5 rounded-full ${hasErr('termsAndConditions') ? 'bg-red-500' : 'bg-blue-500'}`} />
           <h2 className={`text-sm font-bold uppercase tracking-widest ${hasErr('termsAndConditions') ? 'text-red-600' : 'text-blue-700'}`}>

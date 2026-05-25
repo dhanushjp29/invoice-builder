@@ -40,7 +40,7 @@ export default function AccountDetails({ value, errors, onChange }: Props) {
   const patch = (field: keyof AccountDetailsType, val: string) => onChange({ ...v, [field]: val });
 
   return (
-    <div data-tour="account-details" className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-5 ring-1 ring-slate-100">
+    <div data-tour="account-details" className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 mb-5 ring-1 ring-slate-100">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-1 h-5 bg-blue-500 rounded-full" />
         <h2 className="text-sm font-bold text-blue-700 uppercase tracking-widest">Account Details</h2>

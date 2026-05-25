@@ -84,7 +84,9 @@ export default function OnboardingTour({ force = false }: { force?: boolean }) {
   useEffect(() => {
     if (!tourActive.current) return;
 
-    // Step 5 (list) → arrived at /invoice/... → advance to step 6 (editor)
+    // Step 5 (list) → arrived at /invoice/... → advance to step 6 (sidebar list).
+    // Sidebar renders on every viewport now (desktop column / mobile horizontal
+    // strip), so the target always exists — no need to skip on mobile.
     if (activeStep.current === 5 && /^\/invoice\//.test(location.pathname)) {
       activeStep.current = 6;
       setStepIndex(6);
@@ -219,13 +221,32 @@ export default function OnboardingTour({ force = false }: { force?: boolean }) {
       return;
     }
     if (type === EVENTS.TARGET_NOT_FOUND) {
-      // Target missing — wait for the DOM to settle (route change in progress,
-      // animations, etc.) and retry. The route-watcher useEffect handles steady
-      // state; this handles the transient gap right after a route change.
+      // Target missing — usually a transient gap right after a route change.
+      // Retry once after 600ms; if still missing, the target is genuinely not
+      // in the DOM (e.g. a desktop-only sidebar on mobile) — skip the step so
+      // the user isn't stuck behind a frozen overlay.
       setRun(false);
+      const stepAtFailure = activeStep.current;
       setTimeout(() => {
-        const expected = STEP_ROUTES[activeStep.current];
-        if (expected && expected.test(location.pathname)) setRun(true);
+        const expected = STEP_ROUTES[stepAtFailure];
+        const onRoute = expected && expected.test(location.pathname);
+        if (!onRoute) return;
+        // Look for the target. If found, resume; otherwise advance.
+        const step = steps[stepAtFailure];
+        const selector = typeof step?.target === 'string' ? step.target : null;
+        const exists = selector && selector !== 'body'
+          ? !!document.querySelector(selector)
+          : true;
+        if (exists) {
+          setRun(true);
+        } else if (stepAtFailure < steps.length - 1) {
+          // Skip the missing step.
+          activeStep.current = stepAtFailure + 1;
+          setStepIndex(stepAtFailure + 1);
+          setRun(true);
+        } else {
+          finish();
+        }
       }, 600);
       return;
     }

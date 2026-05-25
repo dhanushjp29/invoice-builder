@@ -81,7 +81,7 @@ export default function ClientInfo({ invoice, errors, onChange }: Props) {
   return (
     <div className="space-y-5 mb-5">
       {/* Bill To */}
-      <div data-tour="client-info" className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 ring-1 ring-slate-100">
+      <div data-tour="client-info" className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 ring-1 ring-slate-100">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-1 h-5 bg-blue-500 rounded-full" />
           <h2 className="text-sm font-bold text-blue-700 uppercase tracking-widest">Bill To (Buyer)</h2>
@@ -145,7 +145,7 @@ export default function ClientInfo({ invoice, errors, onChange }: Props) {
       </div>
 
       {/* Delivery Address */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 ring-1 ring-slate-100">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 ring-1 ring-slate-100">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <div className="w-1 h-5 bg-blue-500 rounded-full" />

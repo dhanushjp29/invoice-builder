@@ -267,7 +267,7 @@ export default function MailPreview() {
 
       {/* Action bar */}
       <div data-tour="mail-header" className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3 sm:gap-4 flex-wrap">
           <div>
             <p className="text-sm font-bold text-slate-800">Send Invoice via Gmail</p>
             <p className="text-xs text-slate-500">
@@ -311,11 +311,11 @@ export default function MailPreview() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto py-6 px-4 flex flex-col gap-4">
+      <div className="max-w-4xl mx-auto py-4 sm:py-6 px-3 sm:px-4 flex flex-col gap-4">
         {/* Compose fields */}
-        <div data-tour="mail-compose" className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-bold text-slate-500 w-16 uppercase tracking-wider">From</label>
+        <div data-tour="mail-compose" className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 sm:p-4 flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+            <label className="text-xs font-bold text-slate-500 sm:w-16 uppercase tracking-wider">From</label>
             <div className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-700 flex items-center justify-between">
               <span className={conn ? 'font-semibold text-slate-800' : 'text-amber-700'}>
                 {conn ? conn.email : 'Not connected — click Connect Gmail'}
@@ -328,8 +328,8 @@ export default function MailPreview() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-bold text-slate-500 w-16 uppercase tracking-wider">To</label>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+            <label className="text-xs font-bold text-slate-500 sm:w-16 uppercase tracking-wider">To</label>
             <input
               type="email"
               value={to}
@@ -338,8 +338,8 @@ export default function MailPreview() {
               className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-bold text-slate-500 w-16 uppercase tracking-wider">Subject</label>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+            <label className="text-xs font-bold text-slate-500 sm:w-16 uppercase tracking-wider">Subject</label>
             <input
               type="text"
               value={subject}
@@ -347,8 +347,8 @@ export default function MailPreview() {
               className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
-          <div className="flex items-start gap-3">
-            <label className="text-xs font-bold text-slate-500 w-16 uppercase tracking-wider mt-2">Message</label>
+          <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3">
+            <label className="text-xs font-bold text-slate-500 sm:w-16 uppercase tracking-wider sm:mt-2">Message</label>
             <textarea
               value={bodyText}
               onChange={(e) => setBodyText(e.target.value)}
@@ -356,15 +356,15 @@ export default function MailPreview() {
               className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y"
             />
           </div>
-          <p className="text-[11px] text-slate-400 ml-19">
+          <p className="text-[11px] text-slate-400 sm:ml-19">
             The invoice will be embedded as HTML and attached as a PDF.
           </p>
 
           {/* Attachments — the invoice PDF + every file the user ticked
               "Include In Mail" on in the editor. Each chip opens the file
               in a new tab so the user can verify what's being sent. */}
-          <div className="flex items-start gap-3 pt-3 border-t border-slate-100">
-            <label className="text-xs font-bold text-slate-500 w-16 uppercase tracking-wider mt-1.5">Files</label>
+          <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 pt-3 border-t border-slate-100">
+            <label className="text-xs font-bold text-slate-500 sm:w-16 uppercase tracking-wider sm:mt-1.5">Files</label>
             <div className="flex-1 flex flex-wrap gap-2">
               <AttachmentChip
                 name={`${invoice.invoiceNumber || 'invoice'}.pdf`}
@@ -405,9 +405,14 @@ export default function MailPreview() {
         </div>
 
         {/* Invoice preview (provides #invoice-print-area for both HTML and PDF) */}
-        <div className="rounded-2xl overflow-hidden shadow-lg border border-slate-200">
-          <InvoicePrintView invoice={invoice} currencySymbol={currencyInfo.symbol} />
+        <div className="rounded-2xl overflow-x-auto overflow-y-hidden shadow-lg border border-slate-200">
+          <div className="min-w-180">
+            <InvoicePrintView invoice={invoice} currencySymbol={currencyInfo.symbol} />
+          </div>
         </div>
+        <p className="sm:hidden -mt-2 text-[11px] text-slate-400 text-center px-3">
+          ← swipe to see the full invoice →
+        </p>
       </div>
     </div>
   );

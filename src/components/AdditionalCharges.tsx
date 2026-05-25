@@ -122,12 +122,12 @@ export default function AdditionalCharges({ charges, currency, onChange }: Props
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 mb-5 ring-1 ring-slate-100 overflow-hidden">
-      <div className="px-6 py-4 border-b border-blue-100 bg-blue-50 flex items-center gap-2">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-blue-100 bg-blue-50 flex items-center gap-2">
         <div className="w-1 h-5 bg-blue-500 rounded-full" />
         <h2 className="text-sm font-bold text-blue-700 uppercase tracking-widest">Additional Charges</h2>
       </div>
 
-      <div className="p-6 space-y-3">
+      <div className="p-4 sm:p-6 space-y-3">
         {charges.length > 0 && (
           <div className="space-y-2">
             {charges.map((charge, idx) => {

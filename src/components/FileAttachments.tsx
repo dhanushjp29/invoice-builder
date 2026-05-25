@@ -222,14 +222,14 @@ export default function FileAttachments({ attachments, onChange }: Props) {
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 mb-5 overflow-hidden ring-1 ring-slate-100">
-      <div className="px-6 py-4 border-b border-blue-100 bg-blue-50 flex items-center gap-2">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-blue-100 bg-blue-50 flex items-center gap-2">
         <div className="w-1 h-5 bg-blue-500 rounded-full" />
         <h2 className="text-sm font-bold text-blue-700 uppercase tracking-widest">File Attachments</h2>
         <span className="ml-auto text-xs text-blue-400 font-medium">Not shown in invoice preview</span>
       </div>
 
       {/* Drop zone */}
-      <div className="px-6 pt-5 pb-4">
+      <div className="px-4 sm:px-6 pt-5 pb-4">
         <div
           onDrop={handleDrop}
           onDragOver={(e) => e.preventDefault()}
@@ -257,66 +257,81 @@ export default function FileAttachments({ attachments, onChange }: Props) {
 
       {/* Attachment list */}
       {attachments.length > 0 && (
-        <div className="px-6 pb-5 flex flex-col gap-2">
+        <div className="px-4 sm:px-6 pb-5 flex flex-col gap-2">
           {attachments.map((att) => (
             <div
               key={att._id}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-blue-50/30 transition group"
+              className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-blue-50/30 transition group"
             >
-              <FileTypeIcon mimeType={att.mimeType} />
-
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-800 truncate">{att.name}</p>
-                <p className="text-xs text-slate-400">{mimeLabel(att.mimeType)} · {formatBytes(att.size)}</p>
-              </div>
-
-              <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg cursor-pointer select-none hover:bg-blue-100/60 transition" title="Attach this file to the email">
-                <input
-                  type="checkbox"
-                  checked={!!att.includeInMail}
-                  onChange={(e) => handleToggleIncludeInMail(att._id, e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-400 cursor-pointer"
-                />
-                <span className="text-xs font-semibold text-slate-600">Include In Mail</span>
-              </label>
-
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => handleView(att)}
-                  title="View file"
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-blue-600 hover:bg-blue-100 transition"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  View
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDownload(att)}
-                  title="Download file"
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Download
-                </button>
+              {/* Top row on mobile: icon + filename + remove (X). Single row on desktop. */}
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 sm:flex-1">
+                <FileTypeIcon mimeType={att.mimeType} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 truncate">{att.name}</p>
+                  <p className="text-xs text-slate-400">{mimeLabel(att.mimeType)} · {formatBytes(att.size)}</p>
+                </div>
                 <button
                   type="button"
                   onClick={() => handleRemove(att._id)}
                   title="Remove attachment"
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-red-400 hover:bg-red-50 hover:text-red-600 transition"
+                  className="sm:hidden w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-red-400 hover:bg-red-50 hover:text-red-600 transition"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
+              </div>
+
+              {/* Bottom row on mobile: Include In Mail + View + Download. Inline on desktop. */}
+              <div className="flex items-center justify-between sm:justify-end gap-1 sm:gap-2 flex-wrap">
+                <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg cursor-pointer select-none hover:bg-blue-100/60 transition" title="Attach this file to the email">
+                  <input
+                    type="checkbox"
+                    checked={!!att.includeInMail}
+                    onChange={(e) => handleToggleIncludeInMail(att._id, e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-400 cursor-pointer"
+                  />
+                  <span className="text-xs font-semibold text-slate-600">Include In Mail</span>
+                </label>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleView(att)}
+                    title="View file"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-blue-600 hover:bg-blue-100 transition"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(att)}
+                    title="Download file"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(att._id)}
+                    title="Remove attachment"
+                    className="hidden sm:flex w-7 h-7 rounded-full items-center justify-center text-red-400 hover:bg-red-50 hover:text-red-600 transition"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           ))}

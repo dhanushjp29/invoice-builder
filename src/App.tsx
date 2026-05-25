@@ -66,6 +66,7 @@ export default function App() {
             borderRadius: '10px',
             border: '1px solid #e2e8f0',
             boxShadow: '0 6px 20px rgba(15, 23, 42, 0.08)',
+            maxWidth: 'calc(100vw - 32px)',
           },
           success: {
             iconTheme: { primary: '#10b981', secondary: '#ffffff' },

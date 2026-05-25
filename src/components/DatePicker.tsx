@@ -151,7 +151,7 @@ export default function DatePicker({ label, value, onChange, required = false, e
       </div>
 
       {open && (
-        <div className="absolute z-50 top-full left-0 mt-1 bg-white rounded-xl shadow-xl border border-slate-200 p-3 w-72">
+        <div className="absolute z-50 top-full right-0 sm:right-auto sm:left-0 mt-1 bg-white rounded-xl shadow-xl border border-slate-200 p-3 w-72 max-w-[calc(100vw-24px)]">
           {/* Header */}
           <div className="flex items-center justify-between mb-3">
             <button
