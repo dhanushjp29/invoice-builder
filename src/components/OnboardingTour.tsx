@@ -51,27 +51,31 @@ export default function OnboardingTour({ force = false }: { force?: boolean }) {
   const navigate = useNavigate();
   const [run, setRun] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const activeStep = useRef(0);
   const tourActive = useRef(false);
-  const started = useRef(false);
 
-  // Kick off the tour on first mount (gated by localStorage flag). We use a
-  // ref + setTimeout instead of a `mounted` state to avoid a no-op setState
-  // call inside an effect body — see react-hooks/set-state-in-effect.
+  // Defer the kickoff by one render cycle. This is what survives React's
+  // StrictMode double-mount in dev: the FIRST mount + immediate unmount can't
+  // schedule a setTimeout because `mounted` hasn't flipped yet, and by the
+  // time the SECOND mount runs `setMounted(true)`, the cleanup is already in
+  // the past. Without this two-phase guard, StrictMode's cleanup fires before
+  // the 500ms timer ever resolves and the tour silently never starts.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
+    console.log('[Tour]', { mounted, path: location.pathname, done: localStorage.getItem(STORAGE_KEY), force });
+    if (!mounted) return;
     const done = localStorage.getItem(STORAGE_KEY) === '1';
     if (!force && done) return;
-    if (location.pathname !== '/') return;
-    const t = setTimeout(() => {
-      setStepIndex(0);
-      setRun(true);
-      tourActive.current = true;
-    }, 500);
-    return () => clearTimeout(t);
+    if (location.pathname === '/') {
+      console.log('[Tour] scheduling start in 500ms');
+      const t = setTimeout(() => { console.log('[Tour] tour started!'); setStepIndex(0); setRun(true); tourActive.current = true; }, 500);
+      return () => { console.log('[Tour] cleanup fired'); clearTimeout(t); };
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [force]);
+  }, [mounted, force]);
 
   // Pause/resume + auto-advance on route change.
   //
