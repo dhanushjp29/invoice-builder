@@ -387,6 +387,38 @@ export default function InvoiceBuilder() {
       missingLabels.push(`Line item${badItems.length > 1 ? 's' : ''} #${badItems.join(', #')} (description, qty, rate, UOM)`);
     }
 
+    // Duplicate line items — block save if two rows share the same description
+    const seenDescriptions = new Set<string>();
+    const dupDescriptions = new Set<string>();
+    invoice.lineItems.forEach((it) => {
+      const key = it.description.trim().toLowerCase();
+      if (!key) return;
+      if (seenDescriptions.has(key)) dupDescriptions.add(it.description.trim());
+      else seenDescriptions.add(key);
+    });
+    if (dupDescriptions.size > 0) {
+      const names = [...dupDescriptions].slice(0, 2).map((d) => `"${d}"`).join(', ');
+      const extra = dupDescriptions.size > 2 ? ` +${dupDescriptions.size - 2} more` : '';
+      notify.error(`Duplicate line items: ${names}${extra}. Merge or delete duplicates before saving.`);
+      return false;
+    }
+
+    // Duplicate additional charges — block save if two rows share the same label
+    const seenCharges = new Set<string>();
+    const dupCharges = new Set<string>();
+    (invoice.additionalCharges ?? []).forEach((c) => {
+      const key = c.label.trim().toLowerCase();
+      if (!key) return;
+      if (seenCharges.has(key)) dupCharges.add(c.label.trim());
+      else seenCharges.add(key);
+    });
+    if (dupCharges.size > 0) {
+      const names = [...dupCharges].slice(0, 2).map((d) => `"${d}"`).join(', ');
+      const extra = dupCharges.size > 2 ? ` +${dupCharges.size - 2} more` : '';
+      notify.error(`Duplicate additional charges: ${names}${extra}. Merge or delete duplicates before saving.`);
+      return false;
+    }
+
     setErrors(found);
     if (missingLabels.length === 0) return true;
     const preview = missingLabels.slice(0, 4).join(', ');

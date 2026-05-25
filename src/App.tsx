@@ -54,6 +54,7 @@ export default function App() {
           page shares the same look (no per-page Toaster instances). */}
       <Toaster
         position="top-right"
+        containerStyle={{ top: 72 }}
         toastOptions={{
           duration: 2800,
           style: {
