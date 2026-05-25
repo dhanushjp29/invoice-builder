@@ -70,7 +70,6 @@ export function startGmailConnect(): void {
   const returnTo = window.location.pathname + window.location.search;
   const params = new URLSearchParams({ returnTo });
   const url = `${functionsBaseUrl()}/.netlify/functions/google-auth?${params.toString()}`;
-  console.log('[Gmail OAuth] Redirecting to:', url);
   notify.info('Redirecting to Google…');
   window.location.href = url;
 }
@@ -89,8 +88,6 @@ export function captureOAuthRedirect(): GmailConnection | null {
   const refreshToken = params.get('refresh_token');
   const email = params.get('email');
 
-  console.log('[Gmail OAuth] Capturing redirect:', { email, hasToken: !!refreshToken });
-
   if (!refreshToken || !email) {
     console.warn('[Gmail OAuth] Redirect missing refresh_token or email.');
     return null;
@@ -98,7 +95,6 @@ export function captureOAuthRedirect(): GmailConnection | null {
 
   const conn = { refreshToken, email };
   saveConnection(conn);
-  console.log('[Gmail OAuth] Saved connection for', email);
   notify.success(`Gmail connected as ${email}.`);
 
   // Strip the hash so a refresh doesn't reprocess it
@@ -132,7 +128,6 @@ export async function sendInvoiceEmail(args: {
   }
 
   const url = `${functionsBaseUrl()}/.netlify/functions/send-email`;
-  console.log('[Gmail Send] POST', url, { to: args.to, subject: args.subject });
 
   const res = await fetch(url, {
     method: 'POST',
@@ -143,8 +138,6 @@ export async function sendInvoiceEmail(args: {
       ...args,
     }),
   });
-
-  console.log('[Gmail Send] response status:', res.status);
 
   if (!res.ok) {
     let msg = `Send failed (${res.status})`;

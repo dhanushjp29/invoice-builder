@@ -35,8 +35,10 @@ export async function migrateLegacyAttachments(): Promise<void> {
           changed = true;
           // Strip the heavy `data` field — it's now redundant and was the
           // whole reason localStorage was bloating up.
-          const { data: _data, ...rest } = att;
-          return { ...rest, blobId };
+          // Strip the heavy `data` field — blobId now points to IndexedDB.
+          const rest: Record<string, unknown> = { ...att };
+          delete rest.data;
+          return { ...rest, blobId } as typeof att;
         }),
       );
       if (changed) {

@@ -37,23 +37,100 @@ export function setInvoicePrefix(prefix: string): void {
 
 /** Generate the next invoice number.
  *  Format: {prefix}{FY_YEAR}-{NNNN}  e.g. INV2026-0001
- *  Finds the highest existing sequence number for the current FY prefix, then increments.
+ *  Finds the highest existing sequence number for the current FY prefix across
+ *  ALL persisted invoices (draft, saved, mail-sent, modified) and increments.
+ *
+ *  We scan EVERY invoice — including drafts — so a new invoice's number can
+ *  never collide with a draft that's already holding that slot. Otherwise a
+ *  user could create draft 0005, then create another invoice which would also
+ *  get 0005, producing two visible rows with the same number.
  */
 export function generateInvoiceNumber(): string {
   const prefix = getInvoicePrefix();
   const fyYear = fyStartYear(new Date());
   const stem = `${prefix}${fyYear}-`;          // e.g. "INV2026-"
 
-  // Only count invoices with status 'saved' — drafts do not hold a sequence number.
-  const collection = getCollection().filter((d) => (d.status ?? 'saved') === 'saved');
   let max = 0;
-  for (const doc of collection) {
+  for (const doc of getCollection()) {
     if (doc.invoiceNumber.startsWith(stem)) {
       const seq = parseInt(doc.invoiceNumber.slice(stem.length), 10);
       if (!isNaN(seq) && seq > max) max = seq;
     }
   }
   return `${stem}${String(max + 1).padStart(4, '0')}`;
+}
+
+/** True if `number` is already used by ANY other invoice (including drafts).
+ *  `excludeId` skips the document being saved/updated itself. Two invoices —
+ *  draft or not — can never share a number. */
+export function invoiceNumberExists(number: string, excludeId?: string): boolean {
+  if (!number.trim()) return false;
+  const target = number.trim();
+  return getCollection().some(
+    (d) => d._id !== excludeId && d.invoiceNumber.trim() === target,
+  );
+}
+
+/** Return the invoice with its draft number reconciled. Keeps the stored
+ *  number on disk so the list view and the editor always agree. Only mints a
+ *  fresh number when (a) the invoice has no number, or (b) its number is
+ *  taken by another invoice — neither of which should normally happen now
+ *  that dedupeInvoiceNumbers runs on app boot. */
+export function reconcileDraftNumber(doc: InvoiceDocument): InvoiceDocument {
+  if (doc.status !== 'draft') return doc;
+  if (doc.invoiceNumber.trim() && !invoiceNumberExists(doc.invoiceNumber, doc._id)) {
+    return doc; // stored number is fine — leave it alone
+  }
+  const fresh = generateInvoiceNumber();
+  // Persist so subsequent reads see the same value (list + editor agree).
+  const collection = getCollection();
+  const idx = collection.findIndex((d) => d._id === doc._id);
+  if (idx !== -1) {
+    collection[idx] = { ...collection[idx], invoiceNumber: fresh, updatedAt: new Date().toISOString() };
+    saveCollection(collection);
+  }
+  return { ...doc, invoiceNumber: fresh };
+}
+
+/** One-shot cleanup: scan the entire collection for duplicate invoice numbers
+ *  (drafts included) and renumber the later ones. The oldest instance keeps
+ *  the original number — drafts are renumbered before non-drafts when both
+ *  share a number, since a draft's number is provisional anyway.
+ *  Idempotent — safe to call on every app boot. Returns the renumber count. */
+export function dedupeInvoiceNumbers(): number {
+  const collection = getCollection();
+  // Sort: non-drafts first (preserve their number), then by createdAt ascending
+  // so that within each group the oldest keeps the number.
+  const ordered = [...collection].sort((a, b) => {
+    const aDraft = (a.status ?? 'saved') === 'draft' ? 1 : 0;
+    const bDraft = (b.status ?? 'saved') === 'draft' ? 1 : 0;
+    if (aDraft !== bDraft) return aDraft - bDraft;
+    return (a.createdAt || '').localeCompare(b.createdAt || '');
+  });
+  const seen = new Set<string>();
+  let renumbered = 0;
+  let dirty = false;
+  for (const doc of ordered) {
+    const key = doc.invoiceNumber.trim();
+    if (!key) continue;
+    if (seen.has(key)) {
+      const idx = collection.findIndex((d) => d._id === doc._id);
+      if (idx !== -1) {
+        // Persist in-progress state so generateInvoiceNumber returns a fresh
+        // slot that doesn't collide with anything we've already kept.
+        saveCollection(collection);
+        const fresh = generateInvoiceNumber();
+        collection[idx] = { ...collection[idx], invoiceNumber: fresh, updatedAt: new Date().toISOString() };
+        seen.add(fresh);
+        renumbered++;
+        dirty = true;
+      }
+    } else {
+      seen.add(key);
+    }
+  }
+  if (dirty) saveCollection(collection);
+  return renumbered;
 }
 
 function getCollection(): InvoiceDocument[] {
@@ -71,11 +148,55 @@ function saveCollection(docs: InvoiceDocument[]): void {
 
 export function insertOne(doc: Omit<InvoiceDocument, '_id' | 'createdAt' | 'updatedAt'>): InvoiceDocument {
   const now = new Date().toISOString();
-  const newDoc: InvoiceDocument = { ...doc, _id: uuidv4(), createdAt: now, updatedAt: now };
+  const status = doc.status ?? 'saved';
+  // Final guard: a non-draft invoice must never collide with another. If the
+  // caller forgot to validate (or two tabs race) we bump the number forward
+  // until it's unique. Drafts are exempt — they can share a provisional number.
+  let invoiceNumber = doc.invoiceNumber;
+  if (status !== 'draft' && invoiceNumberExists(invoiceNumber)) {
+    invoiceNumber = generateInvoiceNumber();
+  }
+  const newDoc: InvoiceDocument = {
+    ...doc,
+    invoiceNumber,
+    _id: uuidv4(),
+    createdAt: now,
+    updatedAt: now,
+  };
   const collection = getCollection();
   collection.push(newDoc);
+  // If this is a non-draft invoice, kick any existing drafts that were holding
+  // the same provisional number forward — a draft must never share its number
+  // with a saved invoice, otherwise the user sees two "INV2026-0005" rows.
+  if (status !== 'draft') {
+    bumpConflictingDrafts(collection, invoiceNumber);
+  }
   saveCollection(collection);
   return newDoc;
+}
+
+/** Renumber any draft invoices whose number collides with `takenNumber`.
+ *  Mutates `collection` in place — caller is responsible for `saveCollection`. */
+function bumpConflictingDrafts(collection: InvoiceDocument[], takenNumber: string): void {
+  const target = takenNumber.trim();
+  if (!target) return;
+  // Save the in-progress collection so generateInvoiceNumber sees fresh state.
+  saveCollection(collection);
+  let bumped = false;
+  for (let i = 0; i < collection.length; i++) {
+    const d = collection[i];
+    if ((d.status ?? 'saved') !== 'draft') continue;
+    if (d.invoiceNumber.trim() !== target) continue;
+    const fresh = generateInvoiceNumber();
+    collection[i] = { ...d, invoiceNumber: fresh, updatedAt: new Date().toISOString() };
+    saveCollection(collection); // commit so next generateInvoiceNumber sees this draft's new number
+    bumped = true;
+  }
+  if (bumped && typeof window !== 'undefined') {
+    // Tell the UI to refresh its in-memory snapshot — a draft's displayed
+    // number may have just changed under it.
+    window.dispatchEvent(new CustomEvent('invoiceDB:changed'));
+  }
 }
 
 export function findOne(id: string): InvoiceDocument | null {
@@ -90,7 +211,20 @@ export function updateOne(id: string, updates: Partial<InvoiceDocument>): Invoic
   const collection = getCollection();
   const idx = collection.findIndex((d) => d._id === id);
   if (idx === -1) return null;
+  // Reject the update if it would create a duplicate invoice number.
+  if (updates.invoiceNumber !== undefined) {
+    const nextStatus = updates.status ?? collection[idx].status ?? 'saved';
+    if (nextStatus !== 'draft' && invoiceNumberExists(updates.invoiceNumber, id)) {
+      return null;
+    }
+  }
   collection[idx] = { ...collection[idx], ...updates, updatedAt: new Date().toISOString() };
+  // If this update produced a non-draft invoice, bump any drafts that were
+  // still holding the same number.
+  const finalStatus = collection[idx].status ?? 'saved';
+  if (finalStatus !== 'draft' && collection[idx].invoiceNumber) {
+    bumpConflictingDrafts(collection, collection[idx].invoiceNumber);
+  }
   saveCollection(collection);
   return collection[idx];
 }
@@ -98,6 +232,10 @@ export function updateOne(id: string, updates: Partial<InvoiceDocument>): Invoic
 export function deleteOne(id: string): boolean {
   const collection = getCollection();
   const target = collection.find((d) => d._id === id);
+  if (!target) return false;
+  // Sent invoices form an audit trail — never delete them. The UI also hides
+  // the button, this is the last line of defence against stale code paths.
+  if (target.status === 'mail-sent' || target.status === 'modified') return false;
   const filtered = collection.filter((d) => d._id !== id);
   if (filtered.length === collection.length) return false;
   saveCollection(filtered);
@@ -165,7 +303,10 @@ export function createBlankInvoice(): Omit<InvoiceDocument, '_id' | 'createdAt' 
     status: 'saved',
     invoiceDate: today.toISOString().slice(0, 10),
     dueDate: due.toISOString().slice(0, 10),
-    currency: last?.currency ?? 'INR',
+    // Always default to INR for new invoices. The user can switch the currency
+    // explicitly after creating; we don't inherit from the last invoice because
+    // a one-off USD export shouldn't lock subsequent domestic invoices to USD.
+    currency: 'INR',
 
     poNumber: '',
     projectName: '',

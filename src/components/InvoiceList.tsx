@@ -1,6 +1,18 @@
-import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
+import type ExcelJS from 'exceljs';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+// `exceljs` (~900 KB) and `file-saver` are only needed when the user actually
+// clicks Export — keep them out of the initial bundle.
+async function loadExcelDeps() {
+  const [exceljsMod, fileSaverMod] = await Promise.all([
+    import('exceljs'),
+    import('file-saver'),
+  ]);
+  return {
+    ExcelJS: exceljsMod.default,
+    saveAs: fileSaverMod.saveAs,
+  };
+}
 import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { usePersistentState } from '../hooks/usePersistentState';
@@ -88,7 +100,7 @@ function DropdownSelect({ value, onChange, options }: {
   return (
     <>
       <button ref={triggerRef} type="button" onClick={() => open ? setOpen(false) : openMenu()}
-        className="flex items-center gap-1 pl-3 pr-2 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 hover:border-blue-300 transition cursor-pointer min-w-[4rem]">
+        className="flex items-center gap-1 pl-3 pr-2 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 hover:border-blue-300 transition cursor-pointer min-w-16">
         <span className="flex-1 text-left text-sm">{value}</span>
         <svg className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -236,6 +248,7 @@ function xlDataRow(row: ExcelJS.Row, alt: boolean, numCols: Set<number>, pctCols
 
 // ── XLSX: All Invoices ────────────────────────────────────────────────────────
 async function exportAllXlsx(invoices: InvoiceDocument[]) {
+  const { ExcelJS, saveAs } = await loadExcelDeps();
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Invoice Builder'; wb.created = new Date();
   const ws = wb.addWorksheet('All Invoices', { pageSetup: { fitToPage: true, fitToWidth: 1, orientation: 'landscape' } });
@@ -306,6 +319,7 @@ async function exportAllXlsx(invoices: InvoiceDocument[]) {
 
 // ── XLSX: Detailed Invoice ────────────────────────────────────────────────────
 async function exportDetailedXlsx(invoices: InvoiceDocument[]) {
+  const { ExcelJS, saveAs } = await loadExcelDeps();
   const created = invoices.filter(inv => inv.status === 'saved');
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Invoice Builder'; wb.created = new Date();
@@ -469,7 +483,7 @@ function Pagination({ total, page, pageSize, onPage, onPageSize, label = 'Rows',
         <span className={`text-xs font-medium ${accent} mr-3`}>{from}–{to} of {total}</span>
         <NavBtn target={1} label="«" disabled={page <= 1} onPage={onPage} />
         <NavBtn target={page - 1} label="‹" disabled={page <= 1} onPage={onPage} />
-        <span className="text-xs font-semibold text-slate-700 px-2 min-w-[3.5rem] text-center select-none">{page}/{totalPages}</span>
+        <span className="text-xs font-semibold text-slate-700 px-2 min-w-14 text-center select-none">{page}/{totalPages}</span>
         <NavBtn target={page + 1} label="›" disabled={page >= totalPages} onPage={onPage} />
         <NavBtn target={totalPages} label="»" disabled={page >= totalPages} onPage={onPage} />
       </div>
@@ -610,7 +624,7 @@ function AllInvoicesView({ invoices, onSelect, onDelete, onExport }: AllProps) {
     });
   }, [filtered, sortField, sortDir]);
 
-  useEffect(() => { setPage(1); }, [search, appliedFrom, appliedTo, colFilters, sortField, sortDir]);
+  useEffect(() => { setPage(1); }, [search, appliedFrom, appliedTo, colFilters, sortField, sortDir, setPage]);
 
   const paginated = useMemo(() => sorted.slice((page - 1) * pageSize, page * pageSize), [sorted, page, pageSize]);
 
@@ -740,18 +754,32 @@ function AllInvoicesView({ invoices, onSelect, onDelete, onExport }: AllProps) {
                               : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
                             PDF
                           </button>
-                          {isConf ? (
-                            <div className="inline-flex gap-1">
-                              <button onClick={() => { onDelete(inv._id); setConfirmId(null); }} className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-red-500 text-white hover:bg-red-600 transition">Yes</button>
-                              <button onClick={() => setConfirmId(null)} className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">No</button>
-                            </div>
-                          ) : (
-                            <button onClick={() => setConfirmId(inv._id)} title="Delete"
-                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 hover:text-red-700 transition">
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" /></svg>
-                              Delete
-                            </button>
-                          )}
+                          {(() => {
+                            // Invoices that have been mailed (or modified after mail)
+                            // cannot be deleted — they're part of an audit trail.
+                            const locked = inv.status === 'mail-sent' || inv.status === 'modified';
+                            if (locked) {
+                              return (
+                                <button disabled title="Sent invoices cannot be deleted"
+                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed">
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                  Locked
+                                </button>
+                              );
+                            }
+                            return isConf ? (
+                              <div className="inline-flex gap-1">
+                                <button onClick={() => { onDelete(inv._id); setConfirmId(null); }} className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-red-500 text-white hover:bg-red-600 transition">Yes</button>
+                                <button onClick={() => setConfirmId(null)} className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">No</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setConfirmId(inv._id)} title="Delete"
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 hover:text-red-700 transition">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" /></svg>
+                                Delete
+                              </button>
+                            );
+                          })()}
                         </div>
                       </td>
                     </tr>
@@ -1103,7 +1131,7 @@ function DetailedInvoiceView({ invoices, onExport }: { invoices: InvoiceDocument
     });
   }, [filtered, sortField, sortDir]);
 
-  useEffect(() => { setPage(1); }, [search, appliedFrom, appliedTo, colFilters, sortField, sortDir]);
+  useEffect(() => { setPage(1); }, [search, appliedFrom, appliedTo, colFilters, sortField, sortDir, setPage]);
 
   const paginatedInvoices = useMemo(() => sorted.slice((page - 1) * pageSize, page * pageSize), [sorted, page, pageSize]);
 
@@ -1158,7 +1186,7 @@ function DetailedInvoiceView({ invoices, onExport }: { invoices: InvoiceDocument
       ) : (
         <>
           <div className="overflow-x-auto max-h-[70vh]">
-            <table className="w-full min-w-[1100px]">
+            <table className="w-full min-w-275">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-violet-50 border-b border-violet-100">
                   {DET_COLS.map((col, i) => (
@@ -1192,12 +1220,12 @@ function DetailedInvoiceView({ invoices, onExport }: { invoices: InvoiceDocument
                         <td className="px-3 py-2.5 text-[11px] font-semibold text-violet-700 whitespace-nowrap">{isFirst ? (inv.invoiceNumber || '—') : ''}</td>
                         <td className="px-3 py-2.5 text-[11px] text-gray-600 whitespace-nowrap">{isFirst ? fmtDate(inv.invoiceDate) : ''}</td>
                         <td className="px-3 py-2.5 text-[11px] text-gray-600 whitespace-nowrap">{isFirst ? fmtDate(inv.dueDate) : ''}</td>
-                        <td className="px-3 py-2.5 text-[11px] text-gray-800 max-w-[100px] truncate whitespace-nowrap" title={isFirst ? inv.clientName : ''}>{isFirst ? inv.clientName : ''}</td>
-                        <td className="px-3 py-2.5 text-[11px] text-gray-600 max-w-[90px] truncate whitespace-nowrap" title={isFirst ? inv.companyName : ''}>{isFirst ? inv.companyName : ''}</td>
-                        <td className="px-3 py-2.5 text-[11px] text-gray-500 max-w-[80px] truncate whitespace-nowrap">{isFirst ? (inv.projectName || '—') : ''}</td>
+                        <td className="px-3 py-2.5 text-[11px] text-gray-800 max-w-25 truncate whitespace-nowrap" title={isFirst ? inv.clientName : ''}>{isFirst ? inv.clientName : ''}</td>
+                        <td className="px-3 py-2.5 text-[11px] text-gray-600 max-w-22 truncate whitespace-nowrap" title={isFirst ? inv.companyName : ''}>{isFirst ? inv.companyName : ''}</td>
+                        <td className="px-3 py-2.5 text-[11px] text-gray-500 max-w-20 truncate whitespace-nowrap">{isFirst ? (inv.projectName || '—') : ''}</td>
                         <td className="px-3 py-2.5 text-[11px] text-gray-500 whitespace-nowrap">{isFirst ? inv.currency : ''}</td>
                         <td className="px-3 py-2.5 text-[11px] text-slate-400 text-center">{itemIdx + 1}</td>
-                        <td className="px-3 py-2.5 text-[11px] text-gray-800 max-w-[130px] truncate" title={item.description}>{item.description}</td>
+                        <td className="px-3 py-2.5 text-[11px] text-gray-800 max-w-32.5 truncate" title={item.description}>{item.description}</td>
                         <td className="px-3 py-2.5 text-[11px] text-gray-500">{item.hsnCode || '—'}</td>
                         <td className="px-3 py-2.5 text-[11px] text-gray-500">{item.uom}</td>
                         <td className="px-3 py-2.5 text-[11px] text-gray-700 text-right">{item.quantity}</td>
@@ -1296,7 +1324,7 @@ export default function InvoiceList({ invoices, onSelect, onDelete }: Props) {
   return (
     <div className="flex gap-5 items-start">
       {/* ── Sidebar nav ── */}
-      <aside className="w-48 shrink-0 sticky top-[4.5rem]" data-tour="views-nav">
+      <aside className="w-48 shrink-0 sticky top-18" data-tour="views-nav">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-blue-100 bg-blue-50">
             <span className="text-[11px] font-bold text-blue-700 uppercase tracking-widest">Invoice Views</span>

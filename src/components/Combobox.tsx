@@ -221,7 +221,7 @@ export default function Combobox({
         <button
           type="button"
           tabIndex={-1}
-          onMouseDown={(e) => { e.preventDefault(); open ? closePopup() : openPopup(); }}
+          onMouseDown={(e) => { e.preventDefault(); if (open) closePopup(); else openPopup(); }}
           className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-500 transition"
         >
           <svg className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -56,25 +56,145 @@ export default function MailPreview() {
     );
   }
 
-  /** Build the HTML body — the user's message on top, followed by the invoice preview. */
+  /** Build the HTML body — the user's message on top, followed by the invoice preview.
+   *
+   *  Mobile responsiveness: the desktop layout stays a fixed 780px card. On
+   *  phones, a @media query collapses the outer padding to 0, drops the card's
+   *  border-radius/border, and wraps the invoice block in a horizontal-scroll
+   *  container so the fixed-width invoice table never forces the whole inbox
+   *  to zoom out. The viewport meta tag tells mobile mail clients (Gmail iOS /
+   *  Android, Apple Mail) to honor the breakpoint instead of rendering at a
+   *  pretend 980px width. */
   function buildHtmlBody(): string {
     const previewEl = document.getElementById('invoice-print-area');
-    const invoiceHtml = previewEl ? previewEl.outerHTML : '';
+    const rawInvoiceHtml = previewEl ? previewEl.outerHTML : '';
+    // Wrap the line-items table in a horizontal-scroll container ONLY for
+    // mobile. It has too many columns (Desc / HSN / UOM / Qty / Rate / Tax %
+    // / Tax Amt / Amount) to reflow, and stacking each row would destroy the
+    // tabular meaning. Scoping the scroll to just this table — instead of the
+    // whole invoice — avoids the Gmail "swipe-to-next-email" conflict for
+    // everything except the line items themselves, which the user expects to
+    // scroll. We tag the line-items <div> with class="line-items-scroll" so
+    // the CSS in <style> (and inline fallback) can target it.
+    // Match the line-items wrapper regardless of how the browser serialised
+    // the inline style (whitespace + trailing semicolons vary). We anchor on
+    // the unique "20px 36px" padding + the immediate <table>…<thead> opener
+    // because that pair only appears around the line-items section.
+    const invoiceHtml = rawInvoiceHtml.replace(
+      /<div style="padding:\s*20px\s+36px;?"><table style="width:\s*100%;\s*border-collapse:\s*collapse;?"><thead>/i,
+      '<div class="line-items-scroll" style="padding:20px 36px;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;"><table class="line-items-table" style="width:100%;border-collapse:collapse;min-width:560px;"><thead>'
+    );
     const messageHtml = bodyText
       .split('\n')
       .map((line) => line ? `<p style="margin:0 0 8px 0;">${escapeHtml(line)}</p>` : '<br/>')
       .join('');
 
+    // Mobile email is hard. What we want:
+    //   - Desktop (≥ 601px): centred 780px card, looks like before.
+    //   - Mobile (< 601px):  invoice fills the screen, no horizontal scroll
+    //                        (Gmail's swipe-to-next-email gesture conflicts
+    //                        with inner horizontal scroll, making the user
+    //                        accidentally leave the email).
+    //
+    // The invoice itself is already fluid — every <table> uses width:100%
+    // and percentage column widths. So instead of forcing a fixed pixel
+    // width and scrolling, we just let it reflow into the available width.
+    // The padding inside the invoice cells (originally 28px–36px) is the
+    // only thing that hurts on a narrow viewport; <style> media-queries
+    // dial those down for clients that respect <style> (Apple Mail,
+    // Outlook desktop, Yahoo). Gmail strips <style> but the table still
+    // reflows naturally — the result is a slightly tighter invoice with
+    // some inner padding intact, but no horizontal scroll trap.
     return `<!DOCTYPE html>
-<html><body style="font-family:Arial,sans-serif;color:#1e293b;background:#f8fafc;padding:16px;">
-  <div style="max-width:780px;margin:0 auto;">
-    <div style="background:#fff;padding:20px;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:16px;">
-      ${messageHtml}
-    </div>
-    <div style="background:#fff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
-      ${invoiceHtml}
-    </div>
-  </div>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no" />
+  <style>
+    /* Reset that some mobile mail clients don't apply by default. */
+    html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+    body { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    img { max-width: 100% !important; height: auto !important; border: 0; -ms-interpolation-mode: bicubic; }
+    table { border-collapse: collapse !important; mso-table-lspace: 0; mso-table-rspace: 0; }
+
+    /* Desktop look (unchanged). Honoured by clients that keep <style>. */
+    .mail-wrap { max-width: 780px; margin: 0 auto; }
+    .mail-card { background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 16px; }
+    .mail-invoice { background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; overflow: hidden; }
+
+    /* Mobile (≤ 600px) */
+    @media only screen and (max-width: 600px) {
+      body.mail-body, .mail-body-bg { padding: 0 !important; background: #fff !important; }
+      .mail-wrap { max-width: 100% !important; width: 100% !important; }
+      .mail-card {
+        padding: 14px !important;
+        border-radius: 0 !important;
+        border-left: 0 !important;
+        border-right: 0 !important;
+        margin-bottom: 6px !important;
+        font-size: 14px !important;
+      }
+      .mail-invoice {
+        border-radius: 0 !important;
+        border-left: 0 !important;
+        border-right: 0 !important;
+      }
+      /* Invoice internal cells use 28-36px padding — too tight on phones.
+         Cells with these inline padding values get overridden here. */
+      .mail-invoice td { padding-left: 12px !important; padding-right: 12px !important; }
+      /* The line-items table is wrapped in a horizontal-scroll container with
+         its own min-width — leave its cells at compact 6-8px padding so more
+         columns fit before scrolling kicks in. */
+      .line-items-scroll { padding-left: 8px !important; padding-right: 8px !important; }
+      .line-items-table td,
+      .line-items-table th { padding-left: 6px !important; padding-right: 6px !important; font-size: 11px !important; }
+      .mail-invoice td[style*="font-size: 20px"] { font-size: 16px !important; }
+      .mail-invoice td[style*="font-size: 18px"] { font-size: 15px !important; }
+      .mail-invoice td[style*="font-size: 13px"] { font-size: 12px !important; }
+      /* Stack the two-column header / billing rows on phones so the invoice
+         doesn't squash unreadably narrow. display:block on a <td> works in
+         every modern mobile mail client. */
+      .mail-invoice td[style*="width: 60%"],
+      .mail-invoice td[style*="width: 40%"],
+      .mail-invoice td[style*="width: 50%"],
+      .mail-invoice td[style*="width: 55%"],
+      .mail-invoice td[style*="width: 45%"] {
+        display: block !important;
+        width: 100% !important;
+        text-align: left !important;
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+      }
+    }
+  </style>
+</head>
+<body class="mail-body" style="font-family:Arial,sans-serif;color:#1e293b;background:#f8fafc;padding:16px;margin:0;">
+  <!--
+    Outer wrapper uses a <table> instead of <div> because Outlook's Word-based
+    renderer (still used by Outlook 2016+ on Windows) ignores max-width on
+    divs but respects width on tables. width="100%" lets it fill mobile; the
+    inner table caps at 780px on desktop.
+  -->
+  <table role="presentation" cellPadding="0" cellSpacing="0" width="100%" class="mail-body-bg" style="background:#f8fafc;padding:16px 0;border-collapse:collapse;">
+    <tr>
+      <td align="center" style="padding:0 12px;">
+        <table role="presentation" cellPadding="0" cellSpacing="0" width="100%" class="mail-wrap" style="max-width:780px;margin:0 auto;border-collapse:collapse;">
+          <tr>
+            <td class="mail-card" style="background:#fff;padding:20px;border-radius:8px;border:1px solid #e2e8f0;font-size:14px;line-height:1.5;">
+              ${messageHtml}
+            </td>
+          </tr>
+          <tr><td style="height:16px;line-height:16px;font-size:0;">&nbsp;</td></tr>
+          <tr>
+            <td class="mail-invoice" style="background:#fff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;padding:0;">
+              ${invoiceHtml}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body></html>`;
   }
 
@@ -82,15 +202,17 @@ export default function MailPreview() {
     if (!conn) { notify.error('Connect Gmail first.'); return; }
     if (!to.trim()) { notify.error('Recipient email is required.'); return; }
 
-    console.log('[Mail] Send started', { from: conn.email, to: to.trim(), subject });
     setSending(true);
 
     const sendOp = (async () => {
+      // Yield to the browser so the Lottie overlay can paint its first frames
+      // before html2canvas starts holding the main thread. Two RAFs + a microtask
+      // guarantee the spinner is on-screen before the heavy work begins.
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
       const html = buildHtmlBody();
       const pdfBlob = await generatePdfBlob(`${invoice!.invoiceNumber || 'invoice'}.pdf`);
       const pdfBase64 = await blobToBase64(pdfBlob);
       const mailAttachments = await collectMailAttachments(invoice!);
-      console.log('[Mail] extra attachments:', mailAttachments.map((a) => a.filename));
       await sendInvoiceEmail({
         to: to.trim(),
         subject: subject.trim(),
@@ -134,9 +256,9 @@ export default function MailPreview() {
     <div className="min-h-screen bg-slate-100">
       {/* Toaster is mounted globally in App.tsx */}
 
-      {/* Fullscreen Lottie overlay — only shown while the email is being sent.
-          PDF generation + Gmail API call usually takes a few seconds, long
-          enough that a toast alone feels under-acknowledged. */}
+      {/* Fullscreen Lottie send overlay. The CSS halo around the player keeps
+          visibly pulsing even when html2canvas briefly freezes the JS animation
+          tick during PDF generation. */}
       <LottieLoader open={sending} variant="email" />
 
 
@@ -231,7 +353,7 @@ export default function MailPreview() {
               className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y"
             />
           </div>
-          <p className="text-[11px] text-slate-400 ml-[76px]">
+          <p className="text-[11px] text-slate-400 ml-19">
             The invoice will be embedded as HTML and attached as a PDF.
           </p>
 

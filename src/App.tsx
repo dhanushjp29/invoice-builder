@@ -1,15 +1,19 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import InvoiceBuilder from './components/InvoiceBuilder';
 import MailPreview from './components/MailPreview';
 import SplashScreen from './components/SplashScreen';
-import OnboardingTour from './components/OnboardingTour';
 import { captureOAuthRedirect } from './utils/gmailClient';
 import { migrateLegacyAttachments } from './db/migrateAttachments';
 import { autoSeed } from './db/autoSeed';
+import { dedupeInvoiceNumbers } from './db/invoiceDB';
 import { LottiePreloader } from './components/LottieLoader';
 import { preloadLottieAssets } from './components/lottieAssets';
+
+// OnboardingTour pulls in react-joyride (~150 KB). It only runs on first visit
+// and renders on the list route only, so defer the chunk until idle.
+const OnboardingTour = lazy(() => import('./components/OnboardingTour'));
 
 export default function App() {
   // Splash shows once per tab session so SPA route changes don't replay it.
@@ -23,6 +27,11 @@ export default function App() {
     // guarded by a localStorage flag — safe to call on every mount.
     void migrateLegacyAttachments();
     void autoSeed();
+    // Heal any pre-existing duplicate invoice numbers (e.g. from earlier
+    // versions where the generator only counted 'saved' invoices and could
+    // collide with 'modified' / 'mail-sent' ones).
+    const fixed = dedupeInvoiceNumbers();
+    if (fixed > 0) console.warn(`[invoiceDB] renumbered ${fixed} duplicate invoice number(s)`);
     preloadLottieAssets();
   }, []);
 
@@ -70,8 +79,13 @@ export default function App() {
       </Routes>
 
       {/* First-login product tour. Self-gates on localStorage; only renders on
-          the list route. Waits for the splash to finish to avoid overlap. */}
-      {!showSplash && <OnboardingTour />}
+          the list route. Waits for the splash to finish to avoid overlap.
+          Suspense fallback is null — the tour is non-blocking UX. */}
+      {!showSplash && (
+        <Suspense fallback={null}>
+          <OnboardingTour />
+        </Suspense>
+      )}
 
       {/* Off-screen Lottie warm-up. Pays the WASM compile + animation parse
           cost once at boot so every LottieLoader overlay opens instantly. */}

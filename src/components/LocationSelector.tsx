@@ -1,7 +1,16 @@
-import { useMemo } from 'react';
-import { Country, State, City } from 'country-state-city';
+import { useEffect, useMemo, useState } from 'react';
 import type { LocationData } from '../types/invoice';
 import Combobox from './Combobox';
+
+// `country-state-city` ships ~3-5 MB of bundled geographic data. We import it
+// lazily so it's not part of the main bundle — the dropdowns fall back to an
+// empty option list for the brief moment between mount and chunk-load.
+type CSCModule = typeof import('country-state-city');
+let cscModulePromise: Promise<CSCModule> | null = null;
+function loadCSC(): Promise<CSCModule> {
+  if (!cscModulePromise) cscModulePromise = import('country-state-city');
+  return cscModulePromise;
+}
 
 interface Props {
   label: string;
@@ -49,40 +58,49 @@ export default function LocationSelector({
   const safe = value ?? BLANK_LOCATION;
   const pincodeRequired = requiredPincode ?? requiredLocation;
 
+  const [csc, setCsc] = useState<CSCModule | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    loadCSC().then((mod) => { if (!cancelled) setCsc(mod); });
+    return () => { cancelled = true; };
+  }, []);
+
   // Build option lists. We attach country/state hints via a "value" encoding for cross-search.
   // value scheme: "ISO" for country; "COUNTRY|STATE" for state; "COUNTRY|STATE|CITY" for city.
   const countryOptions = useMemo(
-    () => Country.getAllCountries().map((c) => ({ value: c.isoCode, label: c.name })),
-    []
+    () => csc ? csc.Country.getAllCountries().map((c) => ({ value: c.isoCode, label: c.name })) : [],
+    [csc]
   );
 
   const stateOptions = useMemo(() => {
+    if (!csc) return [];
     if (safe.country) {
-      return State.getStatesOfCountry(safe.country).map((s) => ({
+      return csc.State.getStatesOfCountry(safe.country).map((s) => ({
         value: `${safe.country}|${s.isoCode}`,
         label: s.name,
       }));
     }
     // global search across all states
-    return State.getAllStates().map((s) => ({
+    return csc.State.getAllStates().map((s) => ({
       value: `${s.countryCode}|${s.isoCode}`,
-      label: `${s.name} (${Country.getCountryByCode(s.countryCode)?.name ?? s.countryCode})`,
+      label: `${s.name} (${csc.Country.getCountryByCode(s.countryCode)?.name ?? s.countryCode})`,
     }));
-  }, [safe.country]);
+  }, [csc, safe.country]);
 
   const cityOptions = useMemo(() => {
+    if (!csc) return [];
     if (safe.country && safe.state) {
-      return City.getCitiesOfState(safe.country, safe.state).map((c) => ({
+      return csc.City.getCitiesOfState(safe.country, safe.state).map((c) => ({
         value: `${safe.country}|${safe.state}|${c.name}`,
         label: c.name,
       }));
     }
     // global search across all cities
-    return City.getAllCities().map((c) => ({
+    return csc.City.getAllCities().map((c) => ({
       value: `${c.countryCode}|${c.stateCode}|${c.name}`,
       label: `${c.name}, ${c.stateCode}, ${c.countryCode}`,
     }));
-  }, [safe.country, safe.state]);
+  }, [csc, safe.country, safe.state]);
 
   // Display value for each combobox = the chosen option's value
   const countryValue = safe.country;

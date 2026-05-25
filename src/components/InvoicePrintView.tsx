@@ -184,15 +184,22 @@ export default function InvoicePrintView({ invoice, currencySymbol }: Props) {
         </div>
       )}
 
-      {/* Totals + Notes */}
-      <div style={{ padding: '0 36px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '24px' }}>
-        {invoice.notes && (
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px' }}>Notes</div>
-            <div style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{invoice.notes}</div>
-          </div>
-        )}
-
+      {/* Notes + Totals — laid out as a <table> with two <td>s. Flexbox is
+          unreliable in email clients (Gmail strips `display: flex`), so a
+          table guarantees Notes-on-left + Totals-on-right in both the printed
+          preview AND the embedded HTML mail body. */}
+      <table role="presentation" cellPadding={0} cellSpacing={0} style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <tbody>
+          <tr>
+            <td style={{ padding: '0 12px 28px 36px', verticalAlign: 'top', width: '55%' }}>
+              {invoice.notes && (
+                <>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px' }}>Notes</div>
+                  <div style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{invoice.notes}</div>
+                </>
+              )}
+            </td>
+            <td style={{ padding: '0 36px 28px 12px', verticalAlign: 'top', width: '45%' }}>
         <div style={{ minWidth: '260px', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 16px', borderBottom: '1px solid #e2e8f0' }}>
             <span style={{ fontSize: '13px', color: '#64748b' }}>Subtotal</span>
@@ -263,7 +270,10 @@ export default function InvoicePrintView({ invoice, currencySymbol }: Props) {
             </span>
           </div>
         </div>
-      </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
       {/* Payment Method */}
       {invoice.paymentMethod && (

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate as useRouterNavigate, useLocation } from 'react-router-dom';
 import { notify } from '../utils/notify';
-import { createBlankInvoice, createLineItem, deleteOne, findAll, findOne, generateInvoiceNumber, insertOne, updateOne } from '../db/invoiceDB';
+import { createBlankInvoice, createLineItem, deleteOne, findAll, findOne, insertOne, invoiceNumberExists, reconcileDraftNumber, updateOne } from '../db/invoiceDB';
 import type { AdditionalCharge, InvoiceDocument, LineItem, PaymentMethod } from '../types/invoice';
 import { CURRENCY_OPTIONS } from '../types/invoice';
 import { recalculate } from '../utils/recalculate';
@@ -37,10 +37,7 @@ export default function InvoiceBuilder() {
     if (idFromUrl && idFromUrl !== 'new') {
       const found = findOne(idFromUrl);
       if (found) {
-        const loaded = found.status === 'draft'
-          ? { ...found, invoiceNumber: generateInvoiceNumber() }
-          : found;
-        return recalculate(loaded);
+        return recalculate(reconcileDraftNumber(found));
       }
     }
     const blank = createBlankInvoice();
@@ -53,17 +50,22 @@ export default function InvoiceBuilder() {
   // finishes writing, the user sees an empty list. autoSeed fires
   // 'invoiceDB:seeded' when done; reload the snapshot then.
   useEffect(() => {
-    const onSeeded = () => {
+    const refresh = () => {
       setAllInvoices(findAll());
-      // If the currently-loaded invoice was created by the seeder, refresh it.
+      // If the currently-loaded invoice changed under us (e.g. seeder finished,
+      // or a draft we have open just got auto-renumbered), refresh its state.
       const idFromUrl = parseIdFromPath(window.location.pathname);
       if (idFromUrl && idFromUrl !== 'new') {
         const found = findOne(idFromUrl);
         if (found) setInvoiceRaw(recalculate(found));
       }
     };
-    window.addEventListener('invoiceDB:seeded', onSeeded);
-    return () => window.removeEventListener('invoiceDB:seeded', onSeeded);
+    window.addEventListener('invoiceDB:seeded', refresh);
+    window.addEventListener('invoiceDB:changed', refresh);
+    return () => {
+      window.removeEventListener('invoiceDB:seeded', refresh);
+      window.removeEventListener('invoiceDB:changed', refresh);
+    };
   }, []);
   // isDirty: true whenever the user has modified the current invoice since last save/load
   const [isDirty, setIsDirty] = useState(false);
@@ -165,8 +167,7 @@ export default function InvoiceBuilder() {
       clearErrors(errorKeysFor(field, value));
       setIsDirty(true);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [setInvoice]
   );
 
   // Line item handlers
@@ -175,7 +176,7 @@ export default function InvoiceBuilder() {
       recalculate({ ...prev, lineItems: [...prev.lineItems, createLineItem()] })
     );
     setIsDirty(true);
-  }, []);
+  }, [setInvoice]);
 
   const handleUpdateItem = useCallback(
     (id: string, field: keyof Omit<LineItem, '_id' | 'amount'>, value: string | number) => {
@@ -186,7 +187,7 @@ export default function InvoiceBuilder() {
         return recalculate({ ...prev, lineItems: items });
       });
     },
-    []
+    [setInvoice]
   );
 
   const handleDeleteItem = useCallback((id: string) => {
@@ -194,7 +195,7 @@ export default function InvoiceBuilder() {
       if (prev.lineItems.length === 1) return prev;
       return recalculate({ ...prev, lineItems: prev.lineItems.filter((i) => i._id !== id) });
     });
-  }, []);
+  }, [setInvoice]);
 
   // Resolve a duplicate-description row: sum its quantity into the OTHER row that
   // shares the same description (case-insensitive), then delete the current row.
@@ -215,17 +216,17 @@ export default function InvoiceBuilder() {
       return recalculate({ ...prev, lineItems: nextItems });
     });
     notify.success(`Merged into existing "${target.description}".`);
-  }, [invoice.lineItems]);
+  }, [invoice.lineItems, setInvoice]);
 
   // Additional charges
   const handleChargesChange = useCallback((charges: AdditionalCharge[]) => {
     setInvoice((prev) => recalculate({ ...prev, additionalCharges: charges }));
-  }, []);
+  }, [setInvoice]);
 
   // Round off
   const handleRoundOffChange = useCallback((roundOff: number) => {
     setInvoice((prev) => recalculate({ ...prev, roundOff }));
-  }, []);
+  }, [setInvoice]);
 
   // List-view navigation. Loaders use setInvoiceRaw so the status-flip
   // wrapper doesn't mistake the load for an edit.
@@ -240,9 +241,7 @@ export default function InvoiceBuilder() {
   const handleSelectInvoice = (id: string) => {
     const found = findOne(id);
     if (!found) return;
-    const loaded = found.status === 'draft'
-      ? { ...found, invoiceNumber: generateInvoiceNumber() }
-      : found;
+    const loaded = reconcileDraftNumber(found);
     setInvoiceRaw(recalculate(loaded));
     setErrors(new Set());
     setIsDirty(false);
@@ -358,7 +357,14 @@ export default function InvoiceBuilder() {
       if (!invoice.deliveryLocation?.city?.trim()) { found.add('deliveryCity'); missingLabels.push('Delivery City'); }
     }
 
-    if (!invoice.invoiceNumber.trim()) { found.add('invoiceNumber'); missingLabels.push('Invoice Number'); }
+    if (!invoice.invoiceNumber.trim()) {
+      found.add('invoiceNumber'); missingLabels.push('Invoice Number');
+    } else if (invoiceNumberExists(invoice.invoiceNumber, invoice._id || undefined)) {
+      // Duplicate against another non-draft invoice — block the save so two
+      // invoices never share the same number.
+      found.add('invoiceNumber');
+      missingLabels.push(`Invoice Number "${invoice.invoiceNumber}" already exists`);
+    }
     if (!invoice.invoiceDate.trim()) { found.add('invoiceDate'); missingLabels.push('Invoice Date'); }
     if (!invoice.paymentMethod.trim()) { found.add('paymentMethod'); missingLabels.push('Payment Method'); }
     if (!invoice.termsAndConditions.trim()) { found.add('termsAndConditions'); missingLabels.push('Terms & Conditions'); }
@@ -585,7 +591,7 @@ export default function InvoiceBuilder() {
         </div>
       </header>
 
-      <main className={`mx-auto px-4 sm:px-6 py-6 ${isListMode ? 'max-w-[1480px]' : 'max-w-7xl'}`}>
+      <main className={`mx-auto px-4 sm:px-6 py-6 ${isListMode ? 'max-w-370' : 'max-w-7xl'}`}>
         {isListMode ? (
           <InvoiceList
             invoices={allInvoices}
