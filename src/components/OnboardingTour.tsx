@@ -596,7 +596,14 @@ const tourStyles = `
     filter: drop-shadow(0 0 8px rgba(59,130,246,0.35));
   }
 
-  /* Step 5: only INV2026-0001 should be clickable. Dim & block every other row. */
+  /* Step 6 (idx 5): block the Export XLSX button so only the invoice row is clickable */
+  body[data-tour-step="5"] [data-tour="export-xlsx"] {
+    pointer-events: none;
+    opacity: 0.35;
+    filter: grayscale(0.6);
+  }
+
+  /* Step 6 (idx 5): only INV2026-0001 should be clickable. Dim & block every other row. */
   body[data-tour-step="5"] [data-tour-row]:not([data-tour-row="INV2026-0001"]) {
     pointer-events: none;
     opacity: 0.35;
@@ -606,5 +613,54 @@ const tourStyles = `
   body[data-tour-step="5"] [data-tour-row="INV2026-0001"] {
     position: relative;
     z-index: 1;
+    /* Row itself stays clickable — children are blocked via ::after glass pane */
+  }
+  body[data-tour-step="5"] [data-tour-row="INV2026-0001"]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 9999;
+    cursor: pointer;
+    border-radius: inherit;
+  }
+
+  /*
+   * Steps where the spotlight target should be READ-ONLY (non-interactive).
+   * We render a transparent glass pane on top of the target via ::after so
+   * clicks never reach the underlying inputs/buttons.
+   * Steps (1-based): 3,4,5,7,8,9,10,11,13,15  →  indices: 2,3,4,6,7,8,9,10,12,14
+   * Exclude CTA steps 5(idx4), 11(idx10), 13(idx12) from blocking — those
+   * require a real click on the target to advance the tour.
+   */
+  body[data-tour-step="2"]  [data-tour="views-nav"]::after,
+  body[data-tour-step="3"]  [data-tour="search"]::after,
+  body[data-tour-step="4"]  [data-tour="export-xlsx"]::after,
+  body[data-tour-step="6"]  [data-tour="sidebar-list"]::after,
+  body[data-tour-step="7"]  [data-tour="company-info"]::after,
+  body[data-tour-step="8"]  [data-tour="client-info"]::after,
+  body[data-tour-step="9"]  [data-tour="line-items"]::after,
+  body[data-tour-step="10"] [data-tour="totals"]::after,
+  body[data-tour-step="12"] [data-tour="preview-bar"]::after,
+  body[data-tour-step="14"] [data-tour="mail-compose"]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 9999;
+    cursor: default;
+    border-radius: inherit;
+  }
+
+  /* The target elements need position:relative so ::after is contained */
+  body[data-tour-step="2"]  [data-tour="views-nav"],
+  body[data-tour-step="3"]  [data-tour="search"],
+  body[data-tour-step="4"]  [data-tour="export-xlsx"],
+  body[data-tour-step="6"]  [data-tour="sidebar-list"],
+  body[data-tour-step="7"]  [data-tour="company-info"],
+  body[data-tour-step="8"]  [data-tour="client-info"],
+  body[data-tour-step="9"]  [data-tour="line-items"],
+  body[data-tour-step="10"] [data-tour="totals"],
+  body[data-tour-step="12"] [data-tour="preview-bar"],
+  body[data-tour-step="14"] [data-tour="mail-compose"] {
+    position: relative;
   }
 `;

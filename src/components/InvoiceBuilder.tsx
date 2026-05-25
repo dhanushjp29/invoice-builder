@@ -187,6 +187,7 @@ export default function InvoiceBuilder() {
         );
         return recalculate({ ...prev, lineItems: items });
       });
+      setIsDirty(true);
     },
     [setInvoice]
   );
@@ -196,6 +197,7 @@ export default function InvoiceBuilder() {
       if (prev.lineItems.length === 1) return prev;
       return recalculate({ ...prev, lineItems: prev.lineItems.filter((i) => i._id !== id) });
     });
+    setIsDirty(true);
   }, [setInvoice]);
 
   // Resolve a duplicate-description row: sum its quantity into the OTHER row that
@@ -216,17 +218,20 @@ export default function InvoiceBuilder() {
         .filter((i) => i._id !== id);
       return recalculate({ ...prev, lineItems: nextItems });
     });
+    setIsDirty(true);
     notify.success(`Merged into existing "${target.description}".`);
   }, [invoice.lineItems, setInvoice]);
 
   // Additional charges
   const handleChargesChange = useCallback((charges: AdditionalCharge[]) => {
     setInvoice((prev) => recalculate({ ...prev, additionalCharges: charges }));
+    setIsDirty(true);
   }, [setInvoice]);
 
   // Round off
   const handleRoundOffChange = useCallback((roundOff: number) => {
     setInvoice((prev) => recalculate({ ...prev, roundOff }));
+    setIsDirty(true);
   }, [setInvoice]);
 
   // List-view navigation. Loaders use setInvoiceRaw so the status-flip
@@ -315,11 +320,17 @@ export default function InvoiceBuilder() {
     doNav(target);
   };
 
-  // Don't Save — for new (no _id) invoices: delete the unsaved work; for draft/saved: just navigate away without saving
+  // Don't Save — restore in-memory state to the last persisted copy so that
+  // mutations the user made (deletes, edits) are rolled back before navigating.
   const handleDiscardAndNavigate = () => {
-    if (!invoice._id) {
-      // truly new invoice that was never persisted — nothing to delete
+    if (invoice._id) {
+      const persisted = findOne(invoice._id);
+      if (persisted) setInvoiceRaw(recalculate(reconcileDraftNumber(persisted)));
+    } else {
+      const blank = createBlankInvoice();
+      setInvoiceRaw(recalculate({ ...blank, _id: '', createdAt: '', updatedAt: '' }));
     }
+    setErrors(new Set());
     const target = pendingNavId!;
     setPendingNavId(null);
     setIsDirty(false);

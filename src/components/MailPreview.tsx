@@ -369,6 +369,7 @@ export default function MailPreview() {
               <AttachmentChip
                 name={`${invoice.invoiceNumber || 'invoice'}.pdf`}
                 hint="Invoice (auto)"
+                onAutoClick={() => notify.success(`${invoice.invoiceNumber || 'Invoice'}.pdf is automatically attached in email and look below the invoice content.`)}
               />
               {(invoice.attachments ?? [])
                 .filter((a) => a.includeInMail)
@@ -412,7 +413,7 @@ export default function MailPreview() {
   );
 }
 
-function AttachmentChip({ name, hint, onView }: { name: string; hint: string; onView?: () => void }) {
+function AttachmentChip({ name, hint, onView, onAutoClick }: { name: string; hint: string; onView?: () => void; onAutoClick?: () => void }) {
   const baseClass = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border max-w-full';
   const body = (
     <>
@@ -438,6 +439,19 @@ function AttachmentChip({ name, hint, onView }: { name: string; hint: string; on
         onClick={onView}
         title={`Open ${name} in new tab`}
         className={`${baseClass} border-blue-200 bg-blue-50/60 hover:bg-blue-100 hover:border-blue-300 transition cursor-pointer`}
+      >
+        {body}
+      </button>
+    );
+  }
+
+  if (onAutoClick) {
+    return (
+      <button
+        type="button"
+        onClick={onAutoClick}
+        title="Automatically attached to every email"
+        className={`${baseClass} border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100 hover:border-emerald-300 transition cursor-pointer`}
       >
         {body}
       </button>
