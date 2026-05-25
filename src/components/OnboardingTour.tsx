@@ -596,6 +596,11 @@ const tourStyles = `
     filter: drop-shadow(0 0 8px rgba(59,130,246,0.35));
   }
 
+  /* Step 5 (idx 4): block the Export XLSX button — spotlight shows it but it must not fire */
+  body[data-tour-step="4"] [data-tour="export-xlsx"] {
+    pointer-events: none !important;
+  }
+
   /* Step 6 (idx 5): block the Export XLSX button so only the invoice row is clickable */
   body[data-tour-step="5"] [data-tour="export-xlsx"] {
     pointer-events: none;
