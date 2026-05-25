@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate as useRouterNavigate, useLocation } from 'react-router-dom';
+import { useNavigate as useRouterNavigate, useLocation, Link } from 'react-router-dom';
 import { notify } from '../utils/notify';
 import { createBlankInvoice, createLineItem, deleteOne, findAll, findOne, insertOne, invoiceNumberExists, reconcileDraftNumber, updateOne } from '../db/invoiceDB';
 import type { AdditionalCharge, InvoiceDocument, LineItem, PaymentMethod } from '../types/invoice';
@@ -16,6 +16,7 @@ import InvoicePrintView from './InvoicePrintView';
 import InvoiceSidebar from './InvoiceSidebar';
 import InvoiceTotals from './InvoiceTotals';
 import LineItemsTable from './LineItemsTable';
+import LottieLoader from './LottieLoader';
 import NavGuardModal from './NavGuardModal';
 import PreviewBar from './PreviewBar';
 
@@ -707,6 +708,22 @@ export default function InvoiceBuilder() {
           onCancel={handleCancelNav}
         />
       )}
+
+      {/* Shared overlay for PDF export + Print. Both block the main thread
+          while html2canvas renders the invoice — the loader gives the user
+          consistent feedback that the click was registered. */}
+      <LottieLoader open={exportingPdf || printing} variant="common" />
+
+      {/* Footer — legal links required for Google OAuth verification */}
+      <footer className="border-t border-slate-200 bg-white mt-8 py-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
+          <span>&copy; {new Date().getFullYear()} Invoice Builder. All rights reserved.</span>
+          <div className="flex items-center gap-4">
+            <Link to="/privacy-policy" className="hover:text-blue-600 transition-colors">Privacy Policy</Link>
+            <Link to="/terms-and-conditions" className="hover:text-blue-600 transition-colors">Terms &amp; Conditions</Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

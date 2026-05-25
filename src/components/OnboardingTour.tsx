@@ -65,14 +65,12 @@ export default function OnboardingTour({ force = false }: { force?: boolean }) {
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    console.log('[Tour]', { mounted, path: location.pathname, done: localStorage.getItem(STORAGE_KEY), force });
     if (!mounted) return;
     const done = localStorage.getItem(STORAGE_KEY) === '1';
     if (!force && done) return;
     if (location.pathname === '/') {
-      console.log('[Tour] scheduling start in 500ms');
-      const t = setTimeout(() => { console.log('[Tour] tour started!'); setStepIndex(0); setRun(true); tourActive.current = true; }, 500);
-      return () => { console.log('[Tour] cleanup fired'); clearTimeout(t); };
+      const t = setTimeout(() => { setStepIndex(0); setRun(true); tourActive.current = true; }, 500);
+      return () => clearTimeout(t);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, force]);
@@ -137,6 +135,27 @@ export default function OnboardingTour({ force = false }: { force?: boolean }) {
     return () => { document.body.removeAttribute('data-tour-step'); };
   }, [stepIndex, run]);
 
+  // Step 5 ("Open Your First Invoice") — Joyride auto-flips the tooltip from
+  // `bottom` to `top` when the target sits too close to the top of the
+  // viewport (no room for the card below it). Scrolling the page DOWN moves
+  // the INV2026-0001 row into the middle of the screen with empty space
+  // beneath it, so `bottom` wins and the card appears under the row.
+  // requestAnimationFrame waits for the row to mount before scrolling to it.
+  useEffect(() => {
+    if (!tourActive.current || !run) return;
+    if (stepIndex !== 5) return;
+    requestAnimationFrame(() => {
+      const row = document.querySelector('[data-tour-row="INV2026-0001"]') as HTMLElement | null;
+      if (!row) return;
+      const rect = row.getBoundingClientRect();
+      // Target: place the row about 25% from the top of the viewport so the
+      // bottom 75% is free real estate for the tooltip card.
+      const targetTop = window.innerHeight * 0.25;
+      const delta = rect.top - targetTop;
+      window.scrollBy({ top: delta, behavior: 'instant' as ScrollBehavior });
+    });
+  }, [stepIndex, run]);
+
   const steps: Step[] = [
     { target: 'body', placement: 'center',
       title: 'Welcome to Invoice Builder',
@@ -153,7 +172,7 @@ export default function OnboardingTour({ force = false }: { force?: boolean }) {
     { target: '[data-tour="export-xlsx"]', placement: 'bottom-end',
       title: 'Export to Excel',
       content: 'Download every visible invoice as a polished .xlsx file. Great for accountants and audits.' },
-    { target: '[data-tour="invoice-table"]', placement: 'top',
+    { target: '[data-tour-row="INV2026-0001"]', placement: 'bottom',
       title: 'Open Your First Invoice',
       content: "We've pre-loaded a few demo invoices. Click the top row — INV2026-0001 — to open the editor." },
     { target: '[data-tour="sidebar-list"]', placement: 'right',

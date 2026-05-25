@@ -4,6 +4,8 @@ import { Toaster } from 'react-hot-toast';
 import InvoiceBuilder from './components/InvoiceBuilder';
 import MailPreview from './components/MailPreview';
 import SplashScreen from './components/SplashScreen';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import TermsAndConditions from './components/TermsAndConditions';
 import { captureOAuthRedirect } from './utils/gmailClient';
 import { migrateLegacyAttachments } from './db/migrateAttachments';
 import { autoSeed } from './db/autoSeed';
@@ -75,6 +77,8 @@ export default function App() {
 
       <Routes>
         <Route path="/invoice/:id/mail" element={<MailPreview />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
         <Route path="/*" element={<InvoiceBuilder />} />
       </Routes>
 

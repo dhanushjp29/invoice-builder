@@ -320,7 +320,9 @@ async function exportAllXlsx(invoices: InvoiceDocument[]) {
 // ── XLSX: Detailed Invoice ────────────────────────────────────────────────────
 async function exportDetailedXlsx(invoices: InvoiceDocument[]) {
   const { ExcelJS, saveAs } = await loadExcelDeps();
-  const created = invoices.filter(inv => inv.status === 'saved');
+  // Export EVERY invoice the user is seeing — no longer status-filtered. The
+  // caller already strips drafts before passing the list in, so this matches
+  // what's on screen (Created / Mail Sent / Modified).
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Invoice Builder'; wb.created = new Date();
   const ws = wb.addWorksheet('Detailed Invoice', { pageSetup: { fitToPage: true, orientation: 'landscape' } });
@@ -334,6 +336,7 @@ async function exportDetailedXlsx(invoices: InvoiceDocument[]) {
     { header: 'Company',        key: 'company', width: 26 },
     { header: 'Project',        key: 'project', width: 20 },
     { header: 'Currency',       key: 'curr',    width: 10 },
+    { header: 'Status',         key: 'status',  width: 12 },
     { header: 'Item #',         key: 'itemNo',  width: 7  },
     { header: 'Description',    key: 'desc',    width: 30 },
     { header: 'HSN',            key: 'hsn',     width: 12 },
@@ -362,17 +365,18 @@ async function exportDetailedXlsx(invoices: InvoiceDocument[]) {
     { header: 'Grand Total',    key: 'grand',   width: 14 },
   ];
   ws.columns = cols;
-  // Force HSN column (col 10) to text so numeric-looking codes don't trigger Excel warning
+  // Force HSN column to text so numeric-looking codes don't trigger Excel warning
   ws.getColumn('hsn').numFmt = '0';
   xlHeader(ws.getRow(1), cols.length);
   ws.views = [{ state: 'frozen', ySplit: 1 }];
   ws.autoFilter = `A1:${colLetter(cols.length)}1`;
 
-  const numCols = new Set([13, 14, 17, 19, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34]);
-  const pctCols = new Set([16, 18, 20, 22]);
+  // Column indices shifted by +1 after inserting the Status column at index 9.
+  const numCols = new Set([14, 15, 18, 20, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35]);
+  const pctCols = new Set([17, 19, 21, 23]);
 
   let rowIdx = 0;
-  for (const inv of created) {
+  for (const inv of invoices) {
     inv.lineItems.forEach((item, idx) => {
       const isFirst = idx === 0;
       const isGST = item.tax.startsWith('GST');
@@ -388,6 +392,7 @@ async function exportDetailedXlsx(invoices: InvoiceDocument[]) {
         company: isFirst ? inv.companyName : '',
         project: isFirst ? (inv.projectName ?? '') : '',
         curr: isFirst ? inv.currency : '',
+        status: isFirst ? statusLabel(inv) : '',
         itemNo: idx + 1,
         desc: item.description,
         hsn: item.hsnCode ? (isNaN(Number(item.hsnCode)) ? item.hsnCode : Number(item.hsnCode)) : '',
@@ -416,6 +421,18 @@ async function exportDetailedXlsx(invoices: InvoiceDocument[]) {
         grand: isFirst ? n(inv.grandTotal) : '',
       });
       xlDataRow(row, rowIdx % 2 === 1, numCols, pctCols);
+
+      // Colour the status cell to match the badge (only on the first row of
+      // each invoice — subsequent line items leave the cell empty).
+      if (isFirst) {
+        const sc = row.getCell('status');
+        const statusArgb =
+          inv.status === 'draft'       ? 'FFB45309'
+          : inv.status === 'mail-sent' ? 'FF1D4ED8'
+          : inv.status === 'modified'  ? 'FFC2410C'
+          : 'FF15803D';
+        sc.font = { bold: true, color: { argb: statusArgb } };
+      }
 
       if (isFirst && rowIdx > 0) {
         row.eachCell({ includeEmpty: true }, (cell) => {
@@ -519,7 +536,8 @@ function DateFilterStrip({ fromDate, toDate, onFrom, onTo, onApply, onClear, app
 // ALL INVOICES VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 type ExportRunner = (kind: 'all' | 'detailed', work: () => Promise<void>) => Promise<void>;
-interface AllProps { invoices: InvoiceDocument[]; onSelect: (id: string) => void; onDelete: (id: string) => void; onExport: ExportRunner; }
+type OverlayRunner = (work: () => Promise<void>) => Promise<void>;
+interface AllProps { invoices: InvoiceDocument[]; onSelect: (id: string) => void; onDelete: (id: string) => void; onExport: ExportRunner; onOverlay: OverlayRunner; }
 type AllSortField = 'invoiceNumber' | 'clientName' | 'companyName' | 'invoiceDate' | 'dueDate' | 'status' | 'grandTotal';
 
 function allDispVal(inv: InvoiceDocument, key: string): string {
@@ -534,7 +552,7 @@ function allDispVal(inv: InvoiceDocument, key: string): string {
   }
 }
 
-function AllInvoicesView({ invoices, onSelect, onDelete, onExport }: AllProps) {
+function AllInvoicesView({ invoices, onSelect, onDelete, onExport, onOverlay }: AllProps) {
   // Persisted across navigation — see usePersistentState. Ephemeral UI state
   // (popover, confirm dialog, in-flight download) stays as plain useState so
   // it doesn't reopen when the user returns.
@@ -631,7 +649,17 @@ function AllInvoicesView({ invoices, onSelect, onDelete, onExport }: AllProps) {
   const handleDl = async (e: React.MouseEvent, inv: InvoiceDocument) => {
     e.stopPropagation();
     setDlId(inv._id);
-    try { await downloadPDF(inv); } finally { setDlId(null); }
+    try {
+      await onOverlay(async () => {
+        try {
+          await downloadPDF(inv);
+        } catch (err) {
+          console.error('PDF download failed:', err);
+          notify.error('PDF download failed.');
+          throw err;
+        }
+      });
+    } finally { setDlId(null); }
   };
 
   // [field, label, className, filterable]
@@ -860,6 +888,12 @@ const DET_COLS: DetColDef[] = [
     sortFn: inv => inv.currency || '',
     colVals: inv => [s_(inv.currency)],
     matches: (inv, a) => a.includes(s_(inv.currency)),
+  },
+  {
+    label: 'Status',
+    sortFn: inv => statusLabel(inv),
+    colVals: inv => [statusLabel(inv)],
+    matches: (inv, a) => a.includes(statusLabel(inv)),
   },
   // ── Item-level ─────────────────────────────────────────────────────────────
   {
@@ -1224,6 +1258,17 @@ function DetailedInvoiceView({ invoices, onExport }: { invoices: InvoiceDocument
                         <td className="px-3 py-2.5 text-[11px] text-gray-600 max-w-22 truncate whitespace-nowrap" title={isFirst ? inv.companyName : ''}>{isFirst ? inv.companyName : ''}</td>
                         <td className="px-3 py-2.5 text-[11px] text-gray-500 max-w-20 truncate whitespace-nowrap">{isFirst ? (inv.projectName || '—') : ''}</td>
                         <td className="px-3 py-2.5 text-[11px] text-gray-500 whitespace-nowrap">{isFirst ? inv.currency : ''}</td>
+                        <td className="px-3 py-2.5 text-[11px] whitespace-nowrap">
+                          {isFirst ? (() => {
+                            const c = statusColors(inv.status);
+                            return (
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${c.bg} ${c.text} ${c.border}`}>
+                                <span className={`w-1 h-1 rounded-full ${c.dot}`} />
+                                {statusLabel(inv)}
+                              </span>
+                            );
+                          })() : ''}
+                        </td>
                         <td className="px-3 py-2.5 text-[11px] text-slate-400 text-center">{itemIdx + 1}</td>
                         <td className="px-3 py-2.5 text-[11px] text-gray-800 max-w-32.5 truncate" title={item.description}>{item.description}</td>
                         <td className="px-3 py-2.5 text-[11px] text-gray-500">{item.hsnCode || '—'}</td>
@@ -1289,6 +1334,10 @@ export default function InvoiceList({ invoices, onSelect, onDelete }: Props) {
   // (string building + buffer encode) blocks the main thread, so showing the
   // overlay gives the user feedback that the click registered.
   const [exporting, setExporting] = useState<null | 'all' | 'detailed'>(null);
+  // Separate flag for long-running per-row work (PDF download, attachment
+  // view). Shares the same LottieLoader so the user always sees the same
+  // overlay regardless of which heavy operation they triggered.
+  const [overlayBusy, setOverlayBusy] = useState(false);
   const runExport = useCallback(async (kind: 'all' | 'detailed', work: () => Promise<void>) => {
     setExporting(kind);
     const startedAt = performance.now();
@@ -1307,6 +1356,23 @@ export default function InvoiceList({ invoices, onSelect, onDelete }: Props) {
       const remaining = MIN_VISIBLE_MS - elapsed;
       if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
       setExporting(null);
+    }
+  }, []);
+
+  /** Wraps any long-running per-row operation with the shared Lottie overlay.
+   *  PDF download and attachment view both call through this so the user gets
+   *  consistent visual feedback. The caller is responsible for the toast. */
+  const runOverlay = useCallback(async (work: () => Promise<void>) => {
+    setOverlayBusy(true);
+    const startedAt = performance.now();
+    const MIN_VISIBLE_MS = 1000;
+    try {
+      await work();
+    } finally {
+      const elapsed = performance.now() - startedAt;
+      const remaining = MIN_VISIBLE_MS - elapsed;
+      if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
+      setOverlayBusy(false);
     }
   }, []);
 
@@ -1357,11 +1423,11 @@ export default function InvoiceList({ invoices, onSelect, onDelete }: Props) {
       {/* ── Content ── */}
       <div className="flex-1 min-w-0">
         {view === 'all'
-          ? <AllInvoicesView invoices={invoices} onSelect={onSelect} onDelete={onDelete} onExport={runExport} />
+          ? <AllInvoicesView invoices={invoices} onSelect={onSelect} onDelete={onDelete} onExport={runExport} onOverlay={runOverlay} />
           : <DetailedInvoiceView invoices={invoices} onExport={runExport} />}
       </div>
 
-      <LottieLoader open={exporting !== null} variant="common" />
+      <LottieLoader open={exporting !== null || overlayBusy} variant="common" />
     </div>
   );
 }

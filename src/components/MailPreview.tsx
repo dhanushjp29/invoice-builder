@@ -35,6 +35,8 @@ export default function MailPreview() {
   // ── All hooks must run before any early return ──
   const [conn, setConn] = useState(getConnection());
   const [sending, setSending] = useState(false);
+  // Flag used while resolving an attachment Blob for the "view" chip.
+  const [viewingFile, setViewingFile] = useState(false);
   const [to, setTo] = useState(invoice?.clientEmail ?? '');
   const [subject, setSubject] = useState(
     invoice ? `Invoice ${invoice.invoiceNumber} from ${invoice.companyName}` : ''
@@ -260,6 +262,7 @@ export default function MailPreview() {
           visibly pulsing even when html2canvas briefly freezes the JS animation
           tick during PDF generation. */}
       <LottieLoader open={sending} variant="email" />
+      <LottieLoader open={viewingFile} variant="common" />
 
 
       {/* Action bar */}
@@ -375,10 +378,19 @@ export default function MailPreview() {
                     name={a.name}
                     hint={formatBytes(a.size)}
                     onView={async () => {
-                      const blob = a.blobId
-                        ? await getAttachmentBlob(a.blobId)
-                        : (a.data ? dataUrlStringToBlob(a.data, a.mimeType) : null);
-                      if (blob) openAttachmentInNewTab(blob, a.name);
+                      setViewingFile(true);
+                      const startedAt = performance.now();
+                      const MIN_VISIBLE_MS = 1000;
+                      try {
+                        const blob = a.blobId
+                          ? await getAttachmentBlob(a.blobId)
+                          : (a.data ? dataUrlStringToBlob(a.data, a.mimeType) : null);
+                        if (blob) openAttachmentInNewTab(blob, a.name);
+                      } finally {
+                        const remaining = MIN_VISIBLE_MS - (performance.now() - startedAt);
+                        if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
+                        setViewingFile(false);
+                      }
                     }}
                   />
                 ))}

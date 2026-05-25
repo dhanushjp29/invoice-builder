@@ -1,9 +1,10 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { Attachment } from '../types/invoice';
 import { createAttachment } from '../db/invoiceDB';
 import { deleteAttachment, getAttachmentBlob, putAttachment } from '../db/attachmentStore';
 import { openAttachmentInNewTab } from '../utils/attachmentView';
 import { notify } from '../utils/notify';
+import LottieLoader from './LottieLoader';
 
 interface Props {
   attachments: Attachment[];
@@ -133,6 +134,10 @@ function dataUrlToBlob(dataUrl: string, fallbackMime: string): Blob | null {
 
 export default function FileAttachments({ attachments, onChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  // Shared Lottie overlay flag for view + download. Both reach into IndexedDB
+  // for the blob, which can be slow for large attachments — the overlay gives
+  // the user feedback that the click registered.
+  const [busy, setBusy] = useState(false);
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -163,22 +168,40 @@ export default function FileAttachments({ attachments, onChange }: Props) {
   }
 
   async function handleView(att: Attachment) {
-    const blob = await resolveBlob(att);
-    if (!blob) { notify.error('Attachment file is missing.'); return; }
-    openAttachmentInNewTab(blob, att.name);
+    setBusy(true);
+    const startedAt = performance.now();
+    const MIN_VISIBLE_MS = 1000;
+    try {
+      const blob = await resolveBlob(att);
+      if (!blob) { notify.error('Attachment file is missing.'); return; }
+      openAttachmentInNewTab(blob, att.name);
+    } finally {
+      const remaining = MIN_VISIBLE_MS - (performance.now() - startedAt);
+      if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
+      setBusy(false);
+    }
   }
 
   async function handleDownload(att: Attachment) {
-    const blob = await resolveBlob(att);
-    if (!blob) { notify.error('Attachment file is missing.'); return; }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = att.name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    setBusy(true);
+    const startedAt = performance.now();
+    const MIN_VISIBLE_MS = 1000;
+    try {
+      const blob = await resolveBlob(att);
+      if (!blob) { notify.error('Attachment file is missing.'); return; }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = att.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } finally {
+      const remaining = MIN_VISIBLE_MS - (performance.now() - startedAt);
+      if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
+      setBusy(false);
+    }
   }
 
   function handleRemove(id: string) {
@@ -299,6 +322,9 @@ export default function FileAttachments({ attachments, onChange }: Props) {
           ))}
         </div>
       )}
+
+      {/* Shared overlay while resolving an IndexedDB blob for view/download. */}
+      <LottieLoader open={busy} variant="common" />
     </div>
   );
 }
