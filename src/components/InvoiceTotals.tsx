@@ -367,7 +367,7 @@ export default function InvoiceTotals({
       </div>
 
       {/* Payment Method */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 ring-1 ring-slate-100">
+      <div className={`bg-white rounded-2xl shadow-sm border p-4 sm:p-6 ring-1 transition ${hasErr('paymentMethod') ? 'border-red-300 ring-red-100' : 'border-slate-200 ring-slate-100'}`}>
         <div className="flex items-center gap-2 mb-4">
           <div className={`w-1 h-5 rounded-full ${hasErr('paymentMethod') ? 'bg-red-500' : 'bg-blue-500'}`} />
           <h2 className={`text-sm font-bold uppercase tracking-widest ${hasErr('paymentMethod') ? 'text-red-600' : 'text-blue-700'}`}>

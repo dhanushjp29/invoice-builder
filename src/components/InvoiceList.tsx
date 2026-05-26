@@ -491,16 +491,16 @@ function Pagination({ total, page, pageSize, onPage, onPageSize, label = 'Rows',
   const border = theme === 'violet' ? 'border-violet-100 bg-violet-50/30' : 'border-slate-100 bg-slate-50/60';
 
   return (
-    <div className={`flex items-center justify-between flex-wrap gap-2 px-4 sm:px-5 py-3 border-t ${border}`}>
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-slate-500">{label} per page</span>
+    <div className={`flex items-center justify-between flex-wrap gap-x-4 gap-y-2 px-4 sm:px-5 py-3 border-t ${border}`}>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className="text-xs text-slate-500 whitespace-nowrap">{label} per page</span>
         <DropdownSelect value={pageSize} onChange={v => { onPageSize(v); onPage(1); }} options={PAGE_SIZES} />
       </div>
-      <div className="flex items-center gap-0.5">
-        <span className={`text-xs font-medium ${accent} mr-3`}>{from}–{to} of {total}</span>
+      <div className="flex items-center gap-0.5 ml-auto">
+        <span className={`text-xs font-medium ${accent} mr-2 whitespace-nowrap`}>{from}–{to} of {total}</span>
         <NavBtn target={1} label="«" disabled={page <= 1} onPage={onPage} />
         <NavBtn target={page - 1} label="‹" disabled={page <= 1} onPage={onPage} />
-        <span className="text-xs font-semibold text-slate-700 px-2 min-w-14 text-center select-none">{page}/{totalPages}</span>
+        <span className="text-xs font-semibold text-slate-700 px-2 min-w-12 text-center select-none">{page}/{totalPages}</span>
         <NavBtn target={page + 1} label="›" disabled={page >= totalPages} onPage={onPage} />
         <NavBtn target={totalPages} label="»" disabled={page >= totalPages} onPage={onPage} />
       </div>

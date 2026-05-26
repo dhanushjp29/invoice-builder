@@ -12,9 +12,9 @@ export default function PreviewBar({ exportingPdf, printing, onMail, onPrint, on
   const busy = exportingPdf || printing;
 
   return (
-    <div data-tour="preview-bar" className="bg-blue-50 border-b border-blue-100 px-4 sm:px-6 py-3 flex items-center justify-between gap-2 flex-wrap print:hidden">
-      <span className="hidden sm:inline text-sm font-semibold text-blue-700">Invoice Preview</span>
-      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap w-full sm:w-auto">
+    <div data-tour="preview-bar" className="bg-blue-50 border-b border-blue-100 px-4 sm:px-6 py-3 flex items-center gap-2 flex-wrap print:hidden">
+      <span className="text-sm font-semibold text-blue-700 shrink-0">Invoice Preview</span>
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap ml-auto">
 
         <button
           onClick={onMail}
@@ -66,9 +66,12 @@ export default function PreviewBar({ exportingPdf, printing, onMail, onPrint, on
 
         <button
           onClick={onBackToEditor}
-          className="text-xs text-blue-600 hover:text-blue-800 font-semibold underline"
+          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 bg-white hover:bg-blue-100 border border-blue-200 transition"
         >
-          ← Back to Editor
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Editor
         </button>
       </div>
     </div>

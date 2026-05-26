@@ -84,7 +84,7 @@ export default function InvoiceSidebar({ invoices, activeId, onSelect, onNew }: 
             <div className="w-1 h-4 bg-blue-500 rounded-full shrink-0" />
             <span className="text-[11px] font-bold text-blue-700 uppercase tracking-widest">Invoices</span>
             <span className="text-[10px] font-semibold text-slate-500 bg-white border border-slate-200 rounded-full px-1.5 py-0.5 leading-none">
-              {invoices.length}
+              {q ? `${filtered.length}/${invoices.length}` : invoices.length}
             </span>
 
             <div className="ml-auto flex items-center gap-1.5">
@@ -181,8 +181,8 @@ export default function InvoiceSidebar({ invoices, activeId, onSelect, onNew }: 
             </div>
           )}
 
-          {/* Pagination — only shown when more than one page */}
-          {filtered.length > 0 && mobileTotalPages > 1 && (
+          {/* Pagination — always visible when there are invoices */}
+          {filtered.length > 0 && (
             <div className="flex items-center justify-between px-3 py-1.5 border-t border-slate-100 bg-slate-50">
               <button
                 disabled={mobilePage <= 1}
