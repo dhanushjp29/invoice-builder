@@ -52,8 +52,23 @@ export default function OnboardingTour({ force = false }: { force?: boolean }) {
   const [run, setRun] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [mounted, setMounted] = useState(false);
+  // Tracks whether the viewport is at lg+ (≥ 1024 px). InvoiceSidebar renders
+  // TWO different DOM nodes (mobile strip + desktop column), tagged with
+  // distinct data-tour attributes. Step 6's target needs to flip with the
+  // viewport so Joyride spotlights the visible one — pointing at a
+  // display:none aside leaves a stuck overlay (the "continuous loading" bug).
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
+  );
   const activeStep = useRef(0);
   const tourActive = useRef(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   // Defer the kickoff by one render cycle. This is what survives React's
   // StrictMode double-mount in dev: the FIRST mount + immediate unmount can't
@@ -177,9 +192,12 @@ export default function OnboardingTour({ force = false }: { force?: boolean }) {
     { target: '[data-tour-row="INV2026-0001"]', placement: 'bottom',
       title: 'Open Your First Invoice',
       content: "We've pre-loaded a few demo invoices. Click the top row — INV2026-0001 — to open the editor." },
-    { target: '[data-tour="sidebar-list"]', placement: 'right',
+    { target: isDesktop ? '[data-tour="sidebar-list-desktop"]' : '[data-tour="sidebar-list-mobile"]',
+      placement: isDesktop ? 'right' : 'bottom',
       title: 'Quick Switcher',
-      content: 'This left panel shows all your invoices. Jump between them without going back to the list.' },
+      content: isDesktop
+        ? 'This left panel shows all your invoices. Jump between them without going back to the list.'
+        : 'Swipe through this strip to jump between invoices without going back to the list.' },
     { target: '[data-tour="company-info"]', placement: 'left',
       title: 'Your Company',
       content: 'Your business name, address, GST, logo, seal and signature live here. They appear on every printed invoice.' },
@@ -661,7 +679,8 @@ const tourStyles = `
   body[data-tour-step="2"]  [data-tour="views-nav"]::after,
   body[data-tour-step="3"]  [data-tour="search"]::after,
   body[data-tour-step="4"]  [data-tour="export-xlsx"]::after,
-  body[data-tour-step="6"]  [data-tour="sidebar-list"]::after,
+  body[data-tour-step="6"]  [data-tour="sidebar-list-desktop"]::after,
+  body[data-tour-step="6"]  [data-tour="sidebar-list-mobile"]::after,
   body[data-tour-step="7"]  [data-tour="company-info"]::after,
   body[data-tour-step="8"]  [data-tour="client-info"]::after,
   body[data-tour-step="9"]  [data-tour="line-items"]::after,
@@ -680,7 +699,8 @@ const tourStyles = `
   body[data-tour-step="2"]  [data-tour="views-nav"],
   body[data-tour-step="3"]  [data-tour="search"],
   body[data-tour-step="4"]  [data-tour="export-xlsx"],
-  body[data-tour-step="6"]  [data-tour="sidebar-list"],
+  body[data-tour-step="6"]  [data-tour="sidebar-list-desktop"],
+  body[data-tour-step="6"]  [data-tour="sidebar-list-mobile"],
   body[data-tour-step="7"]  [data-tour="company-info"],
   body[data-tour-step="8"]  [data-tour="client-info"],
   body[data-tour-step="9"]  [data-tour="line-items"],

@@ -77,7 +77,7 @@ export default function InvoiceSidebar({ invoices, activeId, onSelect, onNew }: 
           MOBILE: horizontal strip between the top nav and the editor.
           Hidden at lg+ where the desktop sidebar takes over.
           ═════════════════════════════════════════════════════════════════ */}
-      <aside data-tour="sidebar-list" className="lg:hidden w-full mb-3">
+      <aside data-tour="sidebar-list-mobile" className="lg:hidden w-full mb-3">
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           {/* Header row: title + count + search + new */}
           <div className="px-3 py-2 border-b border-blue-100 bg-blue-50 flex items-center gap-2 flex-wrap">
@@ -213,7 +213,7 @@ export default function InvoiceSidebar({ invoices, activeId, onSelect, onNew }: 
       {/* ═════════════════════════════════════════════════════════════════
           DESKTOP: vertical sidebar, hidden under lg. Unchanged layout.
           ═════════════════════════════════════════════════════════════════ */}
-      <aside className="w-52 shrink-0 hidden lg:block">
+      <aside data-tour="sidebar-list-desktop" className="w-52 shrink-0 hidden lg:block">
         <div
           className="sticky top-18 flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm"
           style={{ maxHeight: 'calc(100vh - 5.5rem)' }}
