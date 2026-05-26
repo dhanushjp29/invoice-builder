@@ -722,7 +722,7 @@ function AllInvoicesView({ invoices, onSelect, onDelete, onExport, onOverlay }: 
       ) : (
         <>
           <div className="overflow-x-auto" data-tour="invoice-table">
-            <table className="w-full min-w-[820px]">
+            <table className="w-full min-w-205">
               <thead>
                 <tr className="bg-blue-50/50 border-b border-blue-100">
                   {COLS.map(([field, label, cls, filterable]) => (
